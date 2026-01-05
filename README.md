@@ -1,18 +1,18 @@
-# ComfyUI Matrix Nodes (Image Loader & Prompt Splitter)
+# ComfyUI Matrix Nodes
 
 **[🇨🇳 中文说明](README_CN.md)**
 
-A powerful set of custom nodes designed for **Prompt-Driven** or **Excel/CSV-Driven** workflows. It supports dynamic batch loading (up to 10 channels), robust string parsing, and visual error reporting.
+A powerful set of custom nodes designed for **Prompt-Driven** workflows. It supports dynamic batch loading (up to 10 channels), robust string parsing, visual error reporting, and includes a specialized Qwen-VL encoding node.
 
 ---
 
 ## ✨ Key Features
 
-- **Max 10 Channels**: All nodes support up to 10 simultaneous inputs/outputs. You can use any number from 1 to 10. Unused slots automatically sleep.
+- **Max 10 Channels**: Matrix nodes support up to 10 simultaneous inputs/outputs. Unused slots automatically sleep.
 - **Visual Error Reporting**: Instead of crashing your workflow, missing files generate a **Grey Image with Large Red Text** (e.g., "MISSING: A1"), making debugging instant.
 - **Smart Fuzzy Matching**: Input "X1" and it automatically finds "X1.jpg", "X1_Monkey.png", etc. No need for full filenames.
-- **Robust Text Splitter**: Supports custom brackets ([], {}, 【】, “”) and separators (|, ,, -). Perfect for various Prompt formats.
-- **Zero-Value Handling**: Input "0", "None", or empty strings to generate pure White/Black placeholder images.
+- **Robust Text Splitter**: Supports custom brackets ([], {}, 【】, “”) and separators (|, ,, -). Perfect for complex prompt structures.
+- **Qwen-VL Integration**: Includes a standalone, locally-run Text Encode node optimized for Qwen-VL, supporting up to **6 reference images**.
 
 ---
 
@@ -32,11 +32,17 @@ A powerful set of custom nodes designed for **Prompt-Driven** or **Excel/CSV-Dri
 **The Classic**. Slider-based control.
 - **Inputs**: Prefix (e.g., "X") + Index Slider (Int).
 
+### 4. Qwen Text Encode (6 Images)
+**Modified Qwen-VL Encoder**.
+- **Features**: Stripped of all API dependencies (runs purely locally within the ComfyUI environment).
+- **Upgrade**: Expanded input slots from 3 to **6 images** to support complex multi-reference workflows.
+- **Usage**: Encodes text and multiple images for Qwen-VL models.
+
 ---
 
 ## 🛠 Installation
 
-1. Navigate to your ComfyUI custom_nodes folder.
+1. Navigate to your ComfyUI `custom_nodes` folder.
 
 2. Clone this repository:
 
@@ -60,6 +66,9 @@ A powerful set of custom nodes designed for **Prompt-Driven** or **Excel/CSV-Dri
    - Output 1: Loads `Background_A.jpg`.
    - Output 3: Generates a **White Placeholder** (because input is "0").
    - Output 5: Generates a **MISSING FILE** image (if "88" is not found).
+
+3. **Qwen Encode Node**:
+   - Connect images from the Loader Node to the `Qwen Text Encode (6 Images)` slots to guide generation.
 
 ---
 
