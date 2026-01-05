@@ -12,7 +12,7 @@ A powerful set of custom nodes designed for **Prompt-Driven** workflows. It supp
 - **Visual Error Reporting**: Instead of crashing your workflow, missing files generate a **Grey Image with Large Red Text** (e.g., "MISSING: A1"), making debugging instant.
 - **Smart Fuzzy Matching**: Input "X1" and it automatically finds "X1.jpg", "X1_Monkey.png", etc. No need for full filenames.
 - **Robust Text Splitter**: Supports custom brackets ([], {}, 【】, “”) and separators (|, ,, -). Perfect for complex prompt structures.
-- **Qwen-VL Integration**: Includes a standalone, locally-run Text Encode node optimized for Qwen-VL, supporting up to **6 reference images**.
+- **Qwen-VL Integration**: Includes a standalone, locally-run Text Encode node optimized for Qwen-VL, optimized for **5 reference images** to maintain optimal model attention.
 
 ---
 
@@ -32,10 +32,10 @@ A powerful set of custom nodes designed for **Prompt-Driven** workflows. It supp
 **The Classic**. Slider-based control.
 - **Inputs**: Prefix (e.g., "X") + Index Slider (Int).
 
-### 4. Qwen Text Encode (6 Images)
+### 4. Qwen Text Encode (5 Images)
 **Modified Qwen-VL Encoder**.
 - **Features**: Stripped of all API dependencies (runs purely locally within the ComfyUI environment).
-- **Upgrade**: Expanded input slots from 3 to **6 images** to support complex multi-reference workflows.
+- **Optimization**: Supports **1-5 reference images**. Based on engineering experience, restricting input to 5 images ensures optimal attention distribution and instruction following for Qwen-VL models.
 - **Usage**: Encodes text and multiple images for Qwen-VL models.
 
 ---
@@ -68,7 +68,7 @@ A powerful set of custom nodes designed for **Prompt-Driven** workflows. It supp
    - Output 5: Generates a **MISSING FILE** image (if "88" is not found).
 
 3. **Qwen Encode Node**:
-   - Connect images from the Loader Node to the `Qwen Text Encode (6 Images)` slots to guide generation.
+   - Connect images from the Loader Node to the `Qwen Text Encode (5 Images)` slots to guide generation.
 
 ---
 
