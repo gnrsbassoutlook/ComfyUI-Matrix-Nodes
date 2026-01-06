@@ -2,17 +2,20 @@
 
 **[🇨🇳 中文说明](README_CN.md)**
 
-A powerful set of custom nodes designed for **Prompt-Driven** workflows. It supports dynamic batch loading (up to 10 channels), robust string parsing, visual error reporting, and includes a specialized Qwen-VL encoding node.
+A powerful set of custom nodes designed for **Prompt-Driven** workflows. It supports dynamic batch loading (up to 10 channels), robust string parsing, smart text extraction, visual error reporting, and includes a specialized Qwen-VL encoding node.
 
 ---
 
 ## ✨ Key Features
 
-- **Max 10 Channels**: Matrix nodes support up to 10 simultaneous inputs/outputs. Unused slots automatically sleep.
-- **Visual Error Reporting**: Instead of crashing your workflow, missing files generate a **Grey Image with Large Red Text** (e.g., "MISSING: A1"), making debugging instant.
-- **Smart Fuzzy Matching**: Input "X1" and it automatically finds "X1.jpg", "X1_Monkey.png", etc. No need for full filenames.
-- **Robust Text Splitter**: Supports custom brackets ([], {}, 【】, “”) and separators (|, ,, -). Perfect for complex prompt structures.
-- **Qwen-VL Integration**: Includes a standalone, locally-run Text Encode node optimized for Qwen-VL, optimized for **5 reference images** to maintain optimal model attention.
+- **Max 10 Channels**: Matrix nodes support up to 10 simultaneous inputs/outputs. **Unconnected slots are safely ignored** (no errors).
+- **Smart ID Parsing**:
+  - Input `"X1"` automatically matches `X1.jpg`, `X01.png`, or `X1-Description.webp`.
+  - Input `"Y2a"` automatically matches `Y2a.jpg`, `Y02a_Rainy.png`.
+- **Visual Error Reporting**: Missing files generate a **Grey Image with Large Red Text** (e.g., "MISSING: A1") instead of crashing the workflow.
+- **Advanced Text Extraction**: Extract specific IDs (e.g., `003`, `X15a`) from narrative text with the new **Matrix Text Extractor**.
+- **Chinese Tooltips**: Hover over parameters to see detailed explanations (in Chinese).
+- **Qwen-VL Integration**: Includes a standalone, locally-run Text Encode node optimized for Qwen-VL (5 reference images).
 
 ---
 
@@ -20,23 +23,29 @@ A powerful set of custom nodes designed for **Prompt-Driven** workflows. It supp
 
 ### 1. Matrix Image Loader (Direct String 10)
 **The Ultimate Loader**. Accepts strings directly.
-- **Inputs**: Strings (Filenames/Keywords).
-- **Usage**: Connect your Prompt split results here. It finds the images or shows "MISSING" alerts.
+- **Inputs**: Strings (Filenames, IDs like "X1", or Keywords).
+- **Smart Logic**: Automatically normalizes IDs (e.g., `X1` == `X01`). Fallback to fuzzy matching if no ID is found.
+- **Optional Inputs**: You can leave slots empty without errors.
 
 ### 2. Matrix Prompt Splitter (10)
 **The Parser**. Splits a long string into 10 separate outputs.
-- **Inputs**: Long text (e.g., Scene1 [A1 | B2 | C3]).
-- **Config**: Select Bracket Style (e.g., []) and Separator (e.g., |).
+- **Inputs**: Long text (e.g., `Scene1 [A1 | B2 | C3]`).
+- **Config**: Select Bracket Style (e.g., `[]`, `【】`) and Separator (e.g., `|`, `,`).
 
-### 3. Matrix Image Loader (Index 10)
+### 3. Matrix Text Extractor (Smart ID)
+**The Miner**. Extracts specific IDs and descriptions from a text block.
+- **Auto Mode**: Automatically finds 3-5 character IDs (e.g., `X15a`, `003`).
+- **Custom Mode**: Define exact rules for each character position (e.g., "Digit-Digit-Digit").
+- **Features**: Select which match to extract (1st, 2nd...) and control the length of the remaining text.
+
+### 4. Matrix Image Loader (Index 10)
 **The Classic**. Slider-based control.
 - **Inputs**: Prefix (e.g., "X") + Index Slider (Int).
 
-### 4. Qwen Text Encode (5 Images)
+### 5. Qwen Text Encode (5 Images)
 **Modified Qwen-VL Encoder**.
-- **Features**: Stripped of all API dependencies (runs purely locally within the ComfyUI environment).
-- **Optimization**: Supports **1-5 reference images**. Based on engineering experience, restricting input to 5 images ensures optimal attention distribution and instruction following for Qwen-VL models.
-- **Usage**: Encodes text and multiple images for Qwen-VL models.
+- **Features**: Pure local run (no API required).
+- **Optimization**: Supports **1-5 reference images** for optimal attention distribution.
 
 ---
 
@@ -54,21 +63,20 @@ A powerful set of custom nodes designed for **Prompt-Driven** workflows. It supp
 
 ## 🚀 Usage Example
 
-**Scenario**: You have a prompt: `Shot_01 [Background_A | Character_02 | 0 | 0 | 88]`
+**Scenario**: You have a text: `"Shot_01: The hero (X1a) is wearing a raincoat."`
 
-1. **Splitter Node**:
-   - Set **Bracket Style** to `[]`.
-   - Set **Separator** to `|`.
-   - Output: `Str_1="Background_A"`, `Str_2="Character_02"`, `Str_5="88"`.
+1. **Text Extractor**:
+   - Input: `"Shot_01: The hero (X1a) is wearing a raincoat."`
+   - Mode: `Auto`.
+   - Output ID: `X1a`.
+   - Output Remainder: `is wearing a raincoat.`
 
 2. **Loader Node**:
-   - Connect `Str_1` -> `image1_input`.
-   - Output 1: Loads `Background_A.jpg`.
-   - Output 3: Generates a **White Placeholder** (because input is "0").
-   - Output 5: Generates a **MISSING FILE** image (if "88" is not found).
+   - Connect `ID` -> `image1_input`.
+   - Result: Loads `X01a_Hero.jpg`.
 
 3. **Qwen Encode Node**:
-   - Connect images from the Loader Node to the `Qwen Text Encode (5 Images)` slots to guide generation.
+   - Connect the image and the remainder text to guide the generation.
 
 ---
 

@@ -77,13 +77,14 @@ class MatrixImageLoader_Index:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False}),
-                "empty_style": (["White", "Black"], {"default": "White"}),
+                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False, "tooltip": "图片所在的文件夹绝对路径"}),
+                "empty_style": (["White", "Black"], {"default": "White", "tooltip": "当索引为0或找不到文件时，生成的占位图颜色"}),
             },
-            # 将插槽移至 optional，防止不连接报错
             "optional": {
-                "slot1_prefix": ("STRING", {"default": "X"}), "slot1_index": ("INT", {"default": 1, "min": 0, "max": 9999}),
-                "slot2_prefix": ("STRING", {"default": "Y"}), "slot2_index": ("INT", {"default": 2, "min": 0, "max": 9999}),
+                "slot1_prefix": ("STRING", {"default": "X", "tooltip": "第1组图片的前缀 (如 X)"}),
+                "slot1_index": ("INT", {"default": 1, "min": 0, "max": 9999, "tooltip": "第1组图片的序号 (0代表留空)"}),
+                "slot2_prefix": ("STRING", {"default": "Y", "tooltip": "第2组图片的前缀"}),
+                "slot2_index": ("INT", {"default": 2, "min": 0, "max": 9999}),
                 "slot3_prefix": ("STRING", {"default": "Z"}), "slot3_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
                 "slot4_prefix": ("STRING", {"default": "A"}), "slot4_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
                 "slot5_prefix": ("STRING", {"default": "B"}), "slot5_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
@@ -112,10 +113,8 @@ class MatrixImageLoader_Index:
     def process(self, folder_path, empty_style, **kwargs):
         images = []
         for i in range(1, 11):
-            # 使用 kwargs.get 并设置默认值，应对未连接的情况
             prefix = kwargs.get(f"slot{i}_prefix", "X")
             index = kwargs.get(f"slot{i}_index", 0)
-            
             if index == 0:
                 images.append(create_placeholder(empty_style))
             else:
@@ -128,7 +127,7 @@ class MatrixImageLoader_Index:
         return tuple(images)
 
 # ========================================================
-# 3. 节点：字符串直连版 (Max 10) - 智能全字母 ID 版
+# 3. 节点：字符串直连版 (Max 10)
 # ========================================================
 class MatrixImageLoader_Direct:
     def __init__(self): pass
@@ -136,12 +135,11 @@ class MatrixImageLoader_Direct:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False}),
-                "empty_style": (["White", "Black"], {"default": "White"}),
+                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False, "tooltip": "图片所在的文件夹绝对路径"}),
+                "empty_style": (["White", "Black"], {"default": "White", "tooltip": "当输入为0、None或找不到文件时，生成的占位图颜色"}),
             },
-            # 【关键修改】将 image_input 移入 optional，允许不连线！
             "optional": {
-                "image1_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "image1_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入文件名、ID(如X1)或关键词。输入0留空。"}),
                 "image2_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
                 "image3_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
                 "image4_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
@@ -179,13 +177,10 @@ class MatrixImageLoader_Direct:
     def find_file_smart(self, folder, input_str):
         if not os.path.exists(folder): return None
         input_str = input_str.strip()
-        
         inp_prefix, inp_num, inp_suffix = self.parse_id(input_str)
         supported_exts = ["png", "jpg", "jpeg", "webp", "bmp"]
-        
         try:
             all_files = os.listdir(folder)
-            
             if inp_prefix is not None:
                 for filename in all_files:
                     if not any(filename.lower().endswith(ext) for ext in supported_exts):
@@ -193,24 +188,18 @@ class MatrixImageLoader_Direct:
                     name_stem = os.path.splitext(filename)[0]
                     f_prefix, f_num, f_suffix = self.parse_filename(name_stem)
                     if f_prefix is None: continue
-                    if (inp_prefix == f_prefix and 
-                        inp_num == f_num and 
-                        inp_suffix == f_suffix):
+                    if (inp_prefix == f_prefix and inp_num == f_num and inp_suffix == f_suffix):
                         return os.path.join(folder, filename)
-
             direct_path = os.path.join(folder, input_str)
             if os.path.exists(direct_path) and os.path.isfile(direct_path): return direct_path
-
             for ext in supported_exts:
                 test_path = os.path.join(folder, f"{input_str}.{ext}")
                 if os.path.exists(test_path): return test_path
-            
             if inp_prefix is None: 
                 for filename in all_files:
                     if filename.startswith(input_str):
                         if any(filename.lower().endswith(ext) for ext in supported_exts):
                             return os.path.join(folder, filename)
-                            
         except Exception as e:
             print(f"MatrixLoader Error: {e}")
         return None
@@ -218,14 +207,11 @@ class MatrixImageLoader_Direct:
     def process(self, folder_path, empty_style, **kwargs):
         images = []
         for i in range(1, 11):
-            # 如果没连线，kwargs.get 会取到默认值 "0"
             inp = kwargs.get(f"image{i}_input", "0")
             inp_str = str(inp).strip()
-            
             if inp_str == "0" or inp_str == "" or inp_str.lower() == "none":
                 images.append(create_placeholder(empty_style))
                 continue
-            
             path = self.find_file_smart(folder_path, inp_str)
             if path:
                 img = load_image_file(path)
@@ -243,10 +229,10 @@ class MatrixPromptSplitter:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
-                "bracket_style": (["[]", "{}", "()", "<>", "''", '""', "【】", "《》", "（）", "“”"], {"default": "[]"}),
-                "separator": (["|", ",", "-", "_", "+", "=", "&", "@", "#", "$", "%", "^", "*", "~"], {"default": "|"}),
-                "bracket_index": ("INT", {"default": 1, "min": 1, "max": 99}),
+                "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True, "tooltip": "输入包含中括号的长文本"}),
+                "bracket_style": (["[]", "{}", "()", "<>", "''", '""', "【】", "《》", "（）", "“”"], {"default": "[]", "tooltip": "选择文本中使用的括号类型"}),
+                "separator": (["|", ",", "-", "_", "+", "=", "&", "@", "#", "$", "%", "^", "*", "~"], {"default": "|", "tooltip": "选择括号内部使用的分隔符"}),
+                "bracket_index": ("INT", {"default": 1, "min": 1, "max": 99, "tooltip": "提取文本中第几组括号的内容 (1代表第1组)"}),
             },
         }
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
@@ -275,12 +261,107 @@ class MatrixPromptSplitter:
         return tuple(final_parts)
 
 # ========================================================
+# 5. 节点：文本 ID 提取器 (中文提示版 + 数字 Index)
+# ========================================================
+class MatrixTextExtractor:
+    """
+    智能文本 ID 提取器
+    """
+    def __init__(self): pass
+    
+    @classmethod
+    def INPUT_TYPES(s):
+        char_types = ["Any (A-Z,0-9)", "Letter (A-Z)", "Upper (A-Z)", "Lower (a-z)", "Digit (0-9)"]
+        char_types_opt = ["Ignore (End)", "Any (A-Z,0-9)", "Letter (A-Z)", "Upper (A-Z)", "Lower (a-z)", "Digit (0-9)"]
+        
+        return {
+            "required": {
+                "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True, "tooltip": "待提取的源文本"}),
+                "search_mode": (["Auto (Smart 3-5 chars)", "Custom (Define Slots)"], {"default": "Auto (Smart 3-5 chars)", "tooltip": "Auto: 智能提取3-5位ID; Custom: 自定义5位规则"}),
+                # 改为数字输入 (INT)
+                "match_index": ("INT", {"default": 1, "min": 1, "max": 99, "step": 1, "tooltip": "如果文本中有多个符合条件的ID，提取第几个？(1代表第1个)"}),
+                "remainder_length": ("INT", {"default": 0, "min": 0, "max": 9999, "step": 1, "tooltip": "截取ID后多少个字符作为描述。0 = 无限(全部提取)"}),
+            },
+            "optional": {
+                # Custom Mode Slots
+                "char_1_type": (char_types, {"default": "Any (A-Z,0-9)", "tooltip": "[Custom模式] 第1位字符类型"}),
+                "char_2_type": (char_types, {"default": "Any (A-Z,0-9)", "tooltip": "[Custom模式] 第2位字符类型"}),
+                "char_3_type": (char_types, {"default": "Any (A-Z,0-9)", "tooltip": "[Custom模式] 第3位字符类型"}),
+                "char_4_type": (char_types_opt, {"default": "Ignore (End)", "tooltip": "[Custom模式] 第4位字符类型 (可选)"}),
+                "char_5_type": (char_types_opt, {"default": "Ignore (End)", "tooltip": "[Custom模式] 第5位字符类型 (可选)"}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING")
+    RETURN_NAMES = ("ID_String", "Remainder_Text", "Combined_Text")
+    FUNCTION = "extract"
+    CATEGORY = "Custom/Matrix"
+
+    def get_regex_for_type(self, type_str):
+        if "Ignore" in type_str: return ""
+        if "Any" in type_str: return "[a-zA-Z0-9]"
+        if "Letter" in type_str and "Upper" not in type_str and "Lower" not in type_str: return "[a-zA-Z]"
+        if "Upper" in type_str: return "[A-Z]"
+        if "Lower" in type_str: return "[a-z]"
+        if "Digit" in type_str: return "[0-9]"
+        return "."
+
+    def extract(self, text_input, search_mode, match_index, remainder_length, char_1_type, char_2_type, char_3_type, char_4_type, char_5_type):
+        extracted_id = "0"
+        remainder = ""
+        combined = "0"
+        
+        matches = []
+        if search_mode == "Auto (Smart 3-5 chars)":
+            candidates = re.finditer(r'[a-zA-Z0-9]+', text_input)
+            for m in candidates:
+                val = m.group(0)
+                if 3 <= len(val) <= 5:
+                    if val.isalpha(): continue 
+                    matches.append(m)
+        else: # Custom Mode
+            p1 = self.get_regex_for_type(char_1_type)
+            p2 = self.get_regex_for_type(char_2_type)
+            p3 = self.get_regex_for_type(char_3_type)
+            p4 = self.get_regex_for_type(char_4_type)
+            p5 = self.get_regex_for_type(char_5_type)
+            pattern_str = f"({p1}{p2}{p3}{p4}{p5})"
+            matches = list(re.finditer(pattern_str, text_input))
+
+        # 将用户输入的 1-based index 转换为 0-based
+        target_idx = match_index - 1
+        
+        if target_idx >= 0 and target_idx < len(matches):
+            target_match = matches[target_idx]
+            if search_mode.startswith("Auto"):
+                extracted_id = target_match.group(0)
+            else:
+                extracted_id = target_match.group(1)
+            
+            raw_remainder = text_input[target_match.end():]
+            remainder = re.sub(r'^[ :：\-_.]+', '', raw_remainder).strip()
+            
+            if remainder_length > 0:
+                if len(remainder) > remainder_length:
+                    remainder = remainder[:remainder_length]
+            
+            if remainder:
+                combined = f"{extracted_id} {remainder}"
+            else:
+                combined = extracted_id
+        else:
+            print(f"MatrixTextExtractor: Match Index {match_index} out of range (Found {len(matches)} matches).")
+        
+        return (extracted_id, remainder, combined)
+
+# ========================================================
 # 注册所有节点
 # ========================================================
 NODE_CLASS_MAPPINGS = {
     "MatrixImageLoader_Index": MatrixImageLoader_Index,
     "MatrixImageLoader_Direct": MatrixImageLoader_Direct,
-    "MatrixPromptSplitter": MatrixPromptSplitter
+    "MatrixPromptSplitter": MatrixPromptSplitter,
+    "MatrixTextExtractor": MatrixTextExtractor
 }
 if HAS_QWEN:
     NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
@@ -288,7 +369,8 @@ if HAS_QWEN:
 NODE_DISPLAY_NAME_MAPPINGS = {
     "MatrixImageLoader_Index": "Matrix Image Loader (Index 10)",
     "MatrixImageLoader_Direct": "Matrix Image Loader (String 10)",
-    "MatrixPromptSplitter": "Matrix Prompt Splitter (10)"
+    "MatrixPromptSplitter": "Matrix Prompt Splitter (10)",
+    "MatrixTextExtractor": "Matrix Text Extractor (Smart ID)"
 }
 if HAS_QWEN:
     NODE_DISPLAY_NAME_MAPPINGS.update(Qwen_Display_Mappings)
