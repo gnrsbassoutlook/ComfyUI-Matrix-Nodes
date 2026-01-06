@@ -69,7 +69,7 @@ def load_image_file(file_path):
         return None
 
 # ========================================================
-# 2. 节点：数字索引版 (MatrixImageLoader_Index)
+# 2. 节点：数字索引版 (Index)
 # ========================================================
 class MatrixImageLoader_Index:
     def __init__(self): pass
@@ -127,7 +127,7 @@ class MatrixImageLoader_Index:
         return tuple(images)
 
 # ========================================================
-# 3. 节点：字符串直连版 (Max 10) - 智能全字母 ID + 稳定排序版
+# 3. 节点：字符串直连版 (String)
 # ========================================================
 class MatrixImageLoader_Direct:
     def __init__(self): pass
@@ -181,11 +181,10 @@ class MatrixImageLoader_Direct:
         supported_exts = ["png", "jpg", "jpeg", "webp", "bmp"]
         
         try:
-            # 【关键修改】 1. 强制排序，确保稳定性
+            # 强制排序，确保选择稳定性
             all_files = sorted(os.listdir(folder))
             
             if inp_prefix is not None:
-                # 收集所有符合 ID 规则的候选文件
                 candidates = []
                 for filename in all_files:
                     if not any(filename.lower().endswith(ext) for ext in supported_exts):
@@ -193,19 +192,14 @@ class MatrixImageLoader_Direct:
                     name_stem = os.path.splitext(filename)[0]
                     f_prefix, f_num, f_suffix = self.parse_filename(name_stem)
                     if f_prefix is None: continue
-                    
                     if (inp_prefix == f_prefix and inp_num == f_num and inp_suffix == f_suffix):
                         candidates.append(filename)
                 
+                # 优先匹配文件名最短的 (X1.jpg 优于 X1-abc.jpg)
                 if candidates:
-                    # 【关键修改】 2. 优先选择“完全匹配”或“最短文件名”
-                    # 如果 candidates 里有 "X1.jpg" 和 "X1-desc.jpg"
-                    # 我们希望优先选中 X1.jpg。
-                    # 逻辑：按文件名长度排序，短的优先。
                     candidates.sort(key=len)
                     return os.path.join(folder, candidates[0])
 
-            # 策略 B: 传统模式
             direct_path = os.path.join(folder, input_str)
             if os.path.exists(direct_path) and os.path.isfile(direct_path): return direct_path
 
@@ -227,9 +221,11 @@ class MatrixImageLoader_Direct:
         for i in range(1, 11):
             inp = kwargs.get(f"image{i}_input", "0")
             inp_str = str(inp).strip()
+            
             if inp_str == "0" or inp_str == "" or inp_str.lower() == "none":
                 images.append(create_placeholder(empty_style))
                 continue
+            
             path = self.find_file_smart(folder_path, inp_str)
             if path:
                 img = load_image_file(path)
@@ -239,7 +235,7 @@ class MatrixImageLoader_Direct:
         return tuple(images)
 
 # ========================================================
-# 4. 节点：文本拆分器 (Max 10)
+# 4. 节点：文本拆分器 (Splitter)
 # ========================================================
 class MatrixPromptSplitter:
     def __init__(self): pass
@@ -279,14 +275,10 @@ class MatrixPromptSplitter:
         return tuple(final_parts)
 
 # ========================================================
-# 5. 节点：文本 ID 提取器 (中文提示版 + 数字 Index)
+# 5. 节点：文本 ID 提取器 (Extractor)
 # ========================================================
 class MatrixTextExtractor:
-    """
-    智能文本 ID 提取器
-    """
     def __init__(self): pass
-    
     @classmethod
     def INPUT_TYPES(s):
         char_types = ["Any (A-Z,0-9)", "Letter (A-Z)", "Upper (A-Z)", "Lower (a-z)", "Digit (0-9)"]
@@ -300,7 +292,6 @@ class MatrixTextExtractor:
                 "remainder_length": ("INT", {"default": 0, "min": 0, "max": 9999, "step": 1, "tooltip": "截取ID后多少个字符作为描述。0 = 无限(全部提取)"}),
             },
             "optional": {
-                # Custom Mode Slots
                 "char_1_type": (char_types, {"default": "Any (A-Z,0-9)", "tooltip": "[Custom模式] 第1位字符类型"}),
                 "char_2_type": (char_types, {"default": "Any (A-Z,0-9)", "tooltip": "[Custom模式] 第2位字符类型"}),
                 "char_3_type": (char_types, {"default": "Any (A-Z,0-9)", "tooltip": "[Custom模式] 第3位字符类型"}),
@@ -327,7 +318,6 @@ class MatrixTextExtractor:
         extracted_id = "0"
         remainder = ""
         combined = "0"
-        
         matches = []
         if search_mode == "Auto (Smart 3-5 chars)":
             candidates = re.finditer(r'[a-zA-Z0-9]+', text_input)
@@ -346,47 +336,120 @@ class MatrixTextExtractor:
             matches = list(re.finditer(pattern_str, text_input))
 
         target_idx = match_index - 1
-        
         if target_idx >= 0 and target_idx < len(matches):
             target_match = matches[target_idx]
             if search_mode.startswith("Auto"):
                 extracted_id = target_match.group(0)
             else:
                 extracted_id = target_match.group(1)
-            
             raw_remainder = text_input[target_match.end():]
             remainder = re.sub(r'^[ :：\-_.]+', '', raw_remainder).strip()
-            
             if remainder_length > 0:
                 if len(remainder) > remainder_length:
                     remainder = remainder[:remainder_length]
-            
             if remainder:
                 combined = f"{extracted_id} {remainder}"
             else:
                 combined = extracted_id
         else:
-            print(f"MatrixTextExtractor: Match Index {match_index} out of range (Found {len(matches)} matches).")
-        
+            print(f"MatrixTextExtractor: Match Index {match_index} out of range.")
         return (extracted_id, remainder, combined)
 
 # ========================================================
-# 注册所有节点
+# 6. 节点：字符切割刀 (String Slicer) - NEW!
+# ========================================================
+class MatrixStringChopper:
+    """
+    字符串切割刀：截取两个自定义符号之间的文本
+    """
+    def __init__(self): pass
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True, "tooltip": "待切割的源文本"}),
+                "left_delimiter": ("STRING", {"default": "-", "multiline": False, "tooltip": "左侧截断符号 (例如 - )"}),
+                "right_delimiter": ("STRING", {"default": "]", "multiline": False, "tooltip": "右侧截断符号 (例如 ] )"}),
+                "match_index": ("INT", {"default": 1, "min": 1, "max": 99, "step": 1, "tooltip": "如果有多组符合的符号，使用第几组？"}),
+                "include_delimiters": ("BOOLEAN", {"default": False, "tooltip": "输出结果是否包含截断符号本身？"}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "STRING")
+    RETURN_NAMES = ("Middle_Part", "Left_Part", "Right_Part")
+    FUNCTION = "chop"
+    CATEGORY = "Custom/Matrix"
+
+    def chop(self, text_input, left_delimiter, right_delimiter, match_index, include_delimiters):
+        if not text_input or not left_delimiter or not right_delimiter:
+            return ("N/A", "N/A", "N/A")
+
+        # 1. 寻找第 N 个左符号
+        start_pos = -1
+        current_pos = 0
+        for _ in range(match_index):
+            found = text_input.find(left_delimiter, current_pos)
+            if found == -1:
+                return ("N/A", "N/A", "N/A") # 找不到第N个左符号
+            start_pos = found
+            current_pos = found + len(left_delimiter) # 移动指针，继续找下一个
+
+        # 2. 寻找左符号之后出现的第 1 个右符号
+        # (逻辑：通常我们截取的是一对符号之间的内容，所以找最近的一个闭合符)
+        search_start_for_right = start_pos + len(left_delimiter)
+        end_pos = text_input.find(right_delimiter, search_start_for_right)
+
+        if end_pos == -1:
+            return ("N/A", "N/A", "N/A") # 找不到闭合的右符号
+
+        # 3. 切割
+        # 纯内容的索引 (不含符号)
+        content_start = start_pos + len(left_delimiter)
+        content_end = end_pos
+
+        if include_delimiters:
+            # 包含符号：左边界前移，右边界后移
+            cut_start = start_pos
+            cut_end = end_pos + len(right_delimiter)
+        else:
+            # 不包含符号
+            cut_start = content_start
+            cut_end = content_end
+
+        # 输出生成
+        # Middle: 截取部分
+        middle_part = text_input[cut_start:cut_end]
+        
+        # Left: 从头到截取部分的左边 (不含被截取部分)
+        left_part = text_input[:cut_start]
+        
+        # Right: 从截取部分的右边到尾 (不含被截取部分)
+        right_part = text_input[cut_end:]
+
+        return (middle_part, left_part, right_part)
+
+# ========================================================
+# 注册所有节点 (中文美化版)
 # ========================================================
 NODE_CLASS_MAPPINGS = {
     "MatrixImageLoader_Index": MatrixImageLoader_Index,
     "MatrixImageLoader_Direct": MatrixImageLoader_Direct,
     "MatrixPromptSplitter": MatrixPromptSplitter,
-    "MatrixTextExtractor": MatrixTextExtractor
+    "MatrixTextExtractor": MatrixTextExtractor,
+    "MatrixStringChopper": MatrixStringChopper
 }
 if HAS_QWEN:
     NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
 
+# 【汉化重命名】 格式: English Name | 中文名称
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "MatrixImageLoader_Index": "Matrix Image Loader (Index 10)",
-    "MatrixImageLoader_Direct": "Matrix Image Loader (String 10)",
-    "MatrixPromptSplitter": "Matrix Prompt Splitter (10)",
-    "MatrixTextExtractor": "Matrix Text Extractor (Smart ID)"
+    "MatrixImageLoader_Index": "Matrix Image Loader (Index 10) | 矩阵-滑块加载器",
+    "MatrixImageLoader_Direct": "Matrix Image Loader (String 10) | 矩阵-字符加载器",
+    "MatrixPromptSplitter": "Matrix Prompt Splitter (10) | 矩阵-文本拆分器",
+    "MatrixTextExtractor": "Matrix Smart ID Extractor | 矩阵-ID智能提取",
+    "MatrixStringChopper": "Matrix String Slicer | 矩阵-字符切割刀"
 }
 if HAS_QWEN:
+    # 保持 Qwen 的原名，或你也可以自定义
+    Qwen_Display_Mappings["MatrixTextEncodeQwen5"] = "Qwen Text Encode (5 Images) | Qwen-VL编码器"
     NODE_DISPLAY_NAME_MAPPINGS.update(Qwen_Display_Mappings)
