@@ -127,7 +127,7 @@ class MatrixImageLoader_Index:
         return tuple(images)
 
 # ========================================================
-# 3. 节点：字符串直连版 (Max 10)
+# 3. 节点：字符串直连版 (Max 10) - 智能全字母 ID + 稳定排序版
 # ========================================================
 class MatrixImageLoader_Direct:
     def __init__(self): pass
@@ -179,22 +179,40 @@ class MatrixImageLoader_Direct:
         input_str = input_str.strip()
         inp_prefix, inp_num, inp_suffix = self.parse_id(input_str)
         supported_exts = ["png", "jpg", "jpeg", "webp", "bmp"]
+        
         try:
-            all_files = os.listdir(folder)
+            # 【关键修改】 1. 强制排序，确保稳定性
+            all_files = sorted(os.listdir(folder))
+            
             if inp_prefix is not None:
+                # 收集所有符合 ID 规则的候选文件
+                candidates = []
                 for filename in all_files:
                     if not any(filename.lower().endswith(ext) for ext in supported_exts):
                         continue
                     name_stem = os.path.splitext(filename)[0]
                     f_prefix, f_num, f_suffix = self.parse_filename(name_stem)
                     if f_prefix is None: continue
+                    
                     if (inp_prefix == f_prefix and inp_num == f_num and inp_suffix == f_suffix):
-                        return os.path.join(folder, filename)
+                        candidates.append(filename)
+                
+                if candidates:
+                    # 【关键修改】 2. 优先选择“完全匹配”或“最短文件名”
+                    # 如果 candidates 里有 "X1.jpg" 和 "X1-desc.jpg"
+                    # 我们希望优先选中 X1.jpg。
+                    # 逻辑：按文件名长度排序，短的优先。
+                    candidates.sort(key=len)
+                    return os.path.join(folder, candidates[0])
+
+            # 策略 B: 传统模式
             direct_path = os.path.join(folder, input_str)
             if os.path.exists(direct_path) and os.path.isfile(direct_path): return direct_path
+
             for ext in supported_exts:
                 test_path = os.path.join(folder, f"{input_str}.{ext}")
                 if os.path.exists(test_path): return test_path
+            
             if inp_prefix is None: 
                 for filename in all_files:
                     if filename.startswith(input_str):
@@ -278,7 +296,6 @@ class MatrixTextExtractor:
             "required": {
                 "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True, "tooltip": "待提取的源文本"}),
                 "search_mode": (["Auto (Smart 3-5 chars)", "Custom (Define Slots)"], {"default": "Auto (Smart 3-5 chars)", "tooltip": "Auto: 智能提取3-5位ID; Custom: 自定义5位规则"}),
-                # 改为数字输入 (INT)
                 "match_index": ("INT", {"default": 1, "min": 1, "max": 99, "step": 1, "tooltip": "如果文本中有多个符合条件的ID，提取第几个？(1代表第1个)"}),
                 "remainder_length": ("INT", {"default": 0, "min": 0, "max": 9999, "step": 1, "tooltip": "截取ID后多少个字符作为描述。0 = 无限(全部提取)"}),
             },
@@ -328,7 +345,6 @@ class MatrixTextExtractor:
             pattern_str = f"({p1}{p2}{p3}{p4}{p5})"
             matches = list(re.finditer(pattern_str, text_input))
 
-        # 将用户输入的 1-based index 转换为 0-based
         target_idx = match_index - 1
         
         if target_idx >= 0 and target_idx < len(matches):
