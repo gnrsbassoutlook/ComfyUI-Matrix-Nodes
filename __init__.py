@@ -181,7 +181,7 @@ class MatrixImageLoader_Direct:
         supported_exts = ["png", "jpg", "jpeg", "webp", "bmp"]
         
         try:
-            # 强制排序，确保选择稳定性
+            # 强制排序
             all_files = sorted(os.listdir(folder))
             
             if inp_prefix is not None:
@@ -195,7 +195,7 @@ class MatrixImageLoader_Direct:
                     if (inp_prefix == f_prefix and inp_num == f_num and inp_suffix == f_suffix):
                         candidates.append(filename)
                 
-                # 优先匹配文件名最短的 (X1.jpg 优于 X1-abc.jpg)
+                # 优先最短匹配
                 if candidates:
                     candidates.sort(key=len)
                     return os.path.join(folder, candidates[0])
@@ -356,7 +356,7 @@ class MatrixTextExtractor:
         return (extracted_id, remainder, combined)
 
 # ========================================================
-# 6. 节点：字符切割刀 (String Slicer) - NEW!
+# 6. 节点：字符切割刀 (String Slicer) - 逻辑修正版
 # ========================================================
 class MatrixStringChopper:
     """
@@ -375,14 +375,14 @@ class MatrixStringChopper:
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "STRING")
-    RETURN_NAMES = ("Middle_Part", "Left_Part", "Right_Part")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING")
+    RETURN_NAMES = ("Middle_Part", "Left_Part", "Right_Part", "Left_Right_Concat")
     FUNCTION = "chop"
     CATEGORY = "Custom/Matrix"
 
     def chop(self, text_input, left_delimiter, right_delimiter, match_index, include_delimiters):
         if not text_input or not left_delimiter or not right_delimiter:
-            return ("N/A", "N/A", "N/A")
+            return ("N/A", "N/A", "N/A", "N/A")
 
         # 1. 寻找第 N 个左符号
         start_pos = -1
@@ -390,43 +390,41 @@ class MatrixStringChopper:
         for _ in range(match_index):
             found = text_input.find(left_delimiter, current_pos)
             if found == -1:
-                return ("N/A", "N/A", "N/A") # 找不到第N个左符号
+                return ("N/A", "N/A", "N/A", "N/A")
             start_pos = found
-            current_pos = found + len(left_delimiter) # 移动指针，继续找下一个
+            current_pos = found + len(left_delimiter)
 
-        # 2. 寻找左符号之后出现的第 1 个右符号
-        # (逻辑：通常我们截取的是一对符号之间的内容，所以找最近的一个闭合符)
-        search_start_for_right = start_pos + len(left_delimiter)
-        end_pos = text_input.find(right_delimiter, search_start_for_right)
+        # 2. 寻找右符号
+        content_start = start_pos + len(left_delimiter)
+        end_pos = text_input.find(right_delimiter, content_start)
 
         if end_pos == -1:
-            return ("N/A", "N/A", "N/A") # 找不到闭合的右符号
+            return ("N/A", "N/A", "N/A", "N/A")
 
-        # 3. 切割
-        # 纯内容的索引 (不含符号)
-        content_start = start_pos + len(left_delimiter)
-        content_end = end_pos
+        # 3. 核心切割逻辑 (修复版)
+        right_delim_end = end_pos + len(right_delimiter)
 
         if include_delimiters:
-            # 包含符号：左边界前移，右边界后移
-            cut_start = start_pos
-            cut_end = end_pos + len(right_delimiter)
+            # 模式：包含符号
+            # Middle: -[... Content ...]
+            middle_part = text_input[start_pos : right_delim_end]
+            # Left: 004 (Before the left symbol)
+            left_part = text_input[:start_pos]
+            # Right: -Tail (After the right symbol)
+            right_part = text_input[right_delim_end:]
         else:
-            # 不包含符号
-            cut_start = content_start
-            cut_end = content_end
+            # 模式：不包含符号 (因果律消除)
+            # Middle: [... Content ...]
+            middle_part = text_input[content_start : end_pos]
+            # Left: 004 (Stop before left symbol)
+            left_part = text_input[:start_pos]
+            # Right: -Tail (Start after right symbol)
+            right_part = text_input[right_delim_end:]
 
-        # 输出生成
-        # Middle: 截取部分
-        middle_part = text_input[cut_start:cut_end]
-        
-        # Left: 从头到截取部分的左边 (不含被截取部分)
-        left_part = text_input[:cut_start]
-        
-        # Right: 从截取部分的右边到尾 (不含被截取部分)
-        right_part = text_input[cut_end:]
+        # 4. 组合输出 (Left + Right, 也就是挖空后的结果)
+        concat_part = left_part + right_part
 
-        return (middle_part, left_part, right_part)
+        return (middle_part, left_part, right_part, concat_part)
 
 # ========================================================
 # 注册所有节点 (中文美化版)
@@ -441,7 +439,6 @@ NODE_CLASS_MAPPINGS = {
 if HAS_QWEN:
     NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
 
-# 【汉化重命名】 格式: English Name | 中文名称
 NODE_DISPLAY_NAME_MAPPINGS = {
     "MatrixImageLoader_Index": "Matrix Image Loader (Index 10) | 矩阵-滑块加载器",
     "MatrixImageLoader_Direct": "Matrix Image Loader (String 10) | 矩阵-字符加载器",
@@ -450,6 +447,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "MatrixStringChopper": "Matrix String Slicer | 矩阵-字符切割刀"
 }
 if HAS_QWEN:
-    # 保持 Qwen 的原名，或你也可以自定义
     Qwen_Display_Mappings["MatrixTextEncodeQwen5"] = "Qwen Text Encode (5 Images) | Qwen-VL编码器"
     NODE_DISPLAY_NAME_MAPPINGS.update(Qwen_Display_Mappings)
