@@ -104,20 +104,19 @@ class MatrixTextEncodeQwen5:
         return (conditioning, conditioningN, {"samples": output_latent}, )
 
 # ========================================================
-# 节点 2: 10图试验版 (新增!)
+# 节点 2: 10图试验版 (Experimental)
 # ========================================================
 class MatrixTextEncodeQwen10:
     """
     Qwen Text Encode (10 Images) - Experimental
     试验性节点：支持多达 10 张图片输入。
-    注意：输入过多图片可能会稀释模型注意力，导致效果下降。
     """
     
     DESCRIPTION = """
     【Qwen-VL 编码器 (10图试验版)】
     *** EXPERIMENTAL / 试验性功能 ***
     功能：扩展了输入上限，支持 1-10 张参考图。
-    警告：Qwen 模型最佳效果通常在 5 张图以内。输入过多图片可能会导致指令跟随能力下降或画面混乱。请谨慎使用。
+    警告：Qwen 模型最佳效果通常在 5 张图以内。输入过多图片可能会导致指令跟随能力下降或画面混乱。
     """
 
     @classmethod
