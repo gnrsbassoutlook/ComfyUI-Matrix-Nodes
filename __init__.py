@@ -73,6 +73,16 @@ def load_image_file(file_path):
 # ========================================================
 class MatrixImageLoader_Index:
     def __init__(self): pass
+    
+    DESCRIPTION = """
+    【矩阵-滑块加载器】
+    功能：通过“前缀 + 数字滑块”的方式组合文件名并加载图片。
+    适用：文件名非常规范，且通过数字控制更方便的场景。
+    特性：
+    1. 自动补零：输入 1 可匹配 X1.png 或 X01.png。
+    2. 占位图：索引为 0 时输出纯色图。
+    """
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -81,10 +91,8 @@ class MatrixImageLoader_Index:
                 "empty_style": (["White", "Black"], {"default": "White", "tooltip": "当索引为0或找不到文件时，生成的占位图颜色"}),
             },
             "optional": {
-                "slot1_prefix": ("STRING", {"default": "X", "tooltip": "第1组图片的前缀 (如 X)"}),
-                "slot1_index": ("INT", {"default": 1, "min": 0, "max": 9999, "tooltip": "第1组图片的序号 (0代表留空)"}),
-                "slot2_prefix": ("STRING", {"default": "Y", "tooltip": "第2组图片的前缀"}),
-                "slot2_index": ("INT", {"default": 2, "min": 0, "max": 9999}),
+                "slot1_prefix": ("STRING", {"default": "X", "tooltip": "第1组前缀 (如 X)"}), "slot1_index": ("INT", {"default": 1, "min": 0, "max": 9999, "tooltip": "第1组序号 (0=空)"}),
+                "slot2_prefix": ("STRING", {"default": "Y", "tooltip": "第2组前缀"}), "slot2_index": ("INT", {"default": 2, "min": 0, "max": 9999}),
                 "slot3_prefix": ("STRING", {"default": "Z"}), "slot3_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
                 "slot4_prefix": ("STRING", {"default": "A"}), "slot4_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
                 "slot5_prefix": ("STRING", {"default": "B"}), "slot5_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
@@ -95,7 +103,6 @@ class MatrixImageLoader_Index:
                 "slot10_prefix": ("STRING", {"default": "G"}), "slot10_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
             }
         }
-    # 瘦身：Image_1 -> Img_1
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
     RETURN_NAMES = ("Img_1", "Img_2", "Img_3", "Img_4", "Img_5", "Img_6", "Img_7", "Img_8", "Img_9", "Img_10")
     FUNCTION = "process"
@@ -132,6 +139,17 @@ class MatrixImageLoader_Index:
 # ========================================================
 class MatrixImageLoader_Direct:
     def __init__(self): pass
+    
+    DESCRIPTION = """
+    【矩阵-字符加载器】
+    功能：通过字符串(文本/ID)智能匹配并加载图片。
+    核心逻辑：
+    1. 智能ID归一化：输入 "X1" 可自动匹配 "X01.png"、"X1-说明.jpg"、"X1a.webp"。
+    2. 智能排序：如果存在多个匹配项 (如 X1.jpg 和 X1-b.jpg)，优先选择文件名最短的 (X1.jpg)。
+    3. 模糊搜索：如果输入不是ID格式(如 "Background")，则进行前缀模糊匹配。
+    4. 容错：输入 0 或留空，自动输出占位图。
+    """
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -140,19 +158,19 @@ class MatrixImageLoader_Direct:
                 "empty_style": (["White", "Black"], {"default": "White", "tooltip": "当输入为0、None或找不到文件时，生成的占位图颜色"}),
             },
             "optional": {
-                "image1_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入文件名、ID(如X1)或关键词。输入0留空。"}),
-                "image2_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "image3_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "image4_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "image5_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "image6_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "image7_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "image8_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "image9_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "image10_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                # 【修改点】 输入名改为 img_text_x_input，含义更清晰
+                "img_text_1_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入：文件名、ID(如X1)、关键词。输入0或留空以跳过。"}),
+                "img_text_2_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入：文件名、ID(如X1)、关键词。"}),
+                "img_text_3_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入：文件名、ID(如X1)、关键词。"}),
+                "img_text_4_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_text_5_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_text_6_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_text_7_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_text_8_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_text_9_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_text_10_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
             }
         }
-    # 瘦身：Image_1 -> Img_1
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
     RETURN_NAMES = ("Img_1", "Img_2", "Img_3", "Img_4", "Img_5", "Img_6", "Img_7", "Img_8", "Img_9", "Img_10")
     FUNCTION = "process"
@@ -213,11 +231,14 @@ class MatrixImageLoader_Direct:
     def process(self, folder_path, empty_style, **kwargs):
         images = []
         for i in range(1, 11):
-            inp = kwargs.get(f"image{i}_input", "0")
+            # 【修改点】 对应新的输入名
+            inp = kwargs.get(f"img_text_{i}_input", "0")
             inp_str = str(inp).strip()
+            
             if inp_str == "0" or inp_str == "" or inp_str.lower() == "none":
                 images.append(create_placeholder(empty_style))
                 continue
+            
             path = self.find_file_smart(folder_path, inp_str)
             if path:
                 img = load_image_file(path)
@@ -231,6 +252,13 @@ class MatrixImageLoader_Direct:
 # ========================================================
 class MatrixPromptSplitter:
     def __init__(self): pass
+    
+    DESCRIPTION = """
+    【矩阵-文本拆分器】
+    功能：从长文本中提取指定中括号[]内的内容，并按分隔符拆分。
+    示例：输入 "Scene [A1|B2|C3]"，提取第1组，输出 "A1", "B2", "C3"。
+    """
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -241,7 +269,6 @@ class MatrixPromptSplitter:
                 "bracket_index": ("INT", {"default": 1, "min": 1, "max": 99, "tooltip": "提取文本中第几组括号的内容 (1代表第1组)"}),
             },
         }
-    # 瘦身：Str_1 -> Text_1
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
     RETURN_NAMES = ("Text_1", "Text_2", "Text_3", "Text_4", "Text_5", "Text_6", "Text_7", "Text_8", "Text_9", "Text_10")
     FUNCTION = "split_text"
@@ -272,6 +299,19 @@ class MatrixPromptSplitter:
 # ========================================================
 class MatrixTextExtractor:
     def __init__(self): pass
+    
+    DESCRIPTION = """
+    【矩阵-ID智能提取】
+    功能：从叙述性文本中“嗅探”出特定的ID（如 X1, 003）。
+    模式：
+    - Auto: 智能抓取 3-5 位字母数字组合（排除纯字母单词）。
+    - Custom: 每一位都可以自定义（数字/字母/忽略）。
+    输出：
+    - ID: 提取到的编号。
+    - Remainder: ID 之后跟随的描述文本。
+    - Combined: ID + 描述。
+    """
+
     @classmethod
     def INPUT_TYPES(s):
         char_types = ["Any (A-Z,0-9)", "Letter (A-Z)", "Upper (A-Z)", "Lower (a-z)", "Digit (0-9)"]
@@ -293,7 +333,6 @@ class MatrixTextExtractor:
             }
         }
 
-    # 瘦身：ID_String -> ID, Remainder_Text -> Remainder
     RETURN_TYPES = ("STRING", "STRING", "STRING")
     RETURN_NAMES = ("ID", "Remainder", "Combined")
     FUNCTION = "extract"
@@ -354,6 +393,16 @@ class MatrixTextExtractor:
 # ========================================================
 class MatrixStringChopper:
     def __init__(self): pass
+    
+    DESCRIPTION = """
+    【矩阵-字符切割刀】
+    功能：精确截取两个自定义符号（如 '-' 和 ']'）之间的文本。
+    特性：
+    1. 包含/排除：可选择结果是否包含符号本身。
+    2. 多重匹配：文本中有多组符号时，可选择截取第 N 组。
+    3. 挖空拼接：输出口 L+R 提供去除了中间截取部分后的剩余文本。
+    """
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -366,7 +415,6 @@ class MatrixStringChopper:
             }
         }
 
-    # 瘦身：缩写输出名，如 L_Part, L+R
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING")
     RETURN_NAMES = ("Middle", "L_Part", "R_Part", "L+R")
     FUNCTION = "chop"
@@ -406,7 +454,7 @@ class MatrixStringChopper:
         return (middle_part, left_part, right_part, concat_part)
 
 # ========================================================
-# 注册所有节点 (瘦身标题)
+# 注册所有节点
 # ========================================================
 NODE_CLASS_MAPPINGS = {
     "MatrixImageLoader_Index": MatrixImageLoader_Index,
@@ -418,7 +466,7 @@ NODE_CLASS_MAPPINGS = {
 if HAS_QWEN:
     NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
 
-# 【汉化重命名 + 标题缩短】
+# 【汉化重命名】
 NODE_DISPLAY_NAME_MAPPINGS = {
     "MatrixImageLoader_Index": "Loader (Index) | 矩阵-滑块",
     "MatrixImageLoader_Direct": "Loader (String) | 矩阵-字符",
