@@ -95,8 +95,9 @@ class MatrixImageLoader_Index:
                 "slot10_prefix": ("STRING", {"default": "G"}), "slot10_index": ("INT", {"default": 0, "min": 0, "max": 9999}),
             }
         }
+    # 瘦身：Image_1 -> Img_1
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
-    RETURN_NAMES = ("Image_1", "Image_2", "Image_3", "Image_4", "Image_5", "Image_6", "Image_7", "Image_8", "Image_9", "Image_10")
+    RETURN_NAMES = ("Img_1", "Img_2", "Img_3", "Img_4", "Img_5", "Img_6", "Img_7", "Img_8", "Img_9", "Img_10")
     FUNCTION = "process"
     CATEGORY = "Custom/Matrix"
 
@@ -151,8 +152,9 @@ class MatrixImageLoader_Direct:
                 "image10_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
             }
         }
+    # 瘦身：Image_1 -> Img_1
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
-    RETURN_NAMES = ("Image_1", "Image_2", "Image_3", "Image_4", "Image_5", "Image_6", "Image_7", "Image_8", "Image_9", "Image_10")
+    RETURN_NAMES = ("Img_1", "Img_2", "Img_3", "Img_4", "Img_5", "Img_6", "Img_7", "Img_8", "Img_9", "Img_10")
     FUNCTION = "process"
     CATEGORY = "Custom/Matrix"
 
@@ -179,11 +181,8 @@ class MatrixImageLoader_Direct:
         input_str = input_str.strip()
         inp_prefix, inp_num, inp_suffix = self.parse_id(input_str)
         supported_exts = ["png", "jpg", "jpeg", "webp", "bmp"]
-        
         try:
-            # 强制排序
             all_files = sorted(os.listdir(folder))
-            
             if inp_prefix is not None:
                 candidates = []
                 for filename in all_files:
@@ -194,19 +193,14 @@ class MatrixImageLoader_Direct:
                     if f_prefix is None: continue
                     if (inp_prefix == f_prefix and inp_num == f_num and inp_suffix == f_suffix):
                         candidates.append(filename)
-                
-                # 优先最短匹配
                 if candidates:
                     candidates.sort(key=len)
                     return os.path.join(folder, candidates[0])
-
             direct_path = os.path.join(folder, input_str)
             if os.path.exists(direct_path) and os.path.isfile(direct_path): return direct_path
-
             for ext in supported_exts:
                 test_path = os.path.join(folder, f"{input_str}.{ext}")
                 if os.path.exists(test_path): return test_path
-            
             if inp_prefix is None: 
                 for filename in all_files:
                     if filename.startswith(input_str):
@@ -221,11 +215,9 @@ class MatrixImageLoader_Direct:
         for i in range(1, 11):
             inp = kwargs.get(f"image{i}_input", "0")
             inp_str = str(inp).strip()
-            
             if inp_str == "0" or inp_str == "" or inp_str.lower() == "none":
                 images.append(create_placeholder(empty_style))
                 continue
-            
             path = self.find_file_smart(folder_path, inp_str)
             if path:
                 img = load_image_file(path)
@@ -249,8 +241,9 @@ class MatrixPromptSplitter:
                 "bracket_index": ("INT", {"default": 1, "min": 1, "max": 99, "tooltip": "提取文本中第几组括号的内容 (1代表第1组)"}),
             },
         }
+    # 瘦身：Str_1 -> Text_1
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("Str_1", "Str_2", "Str_3", "Str_4", "Str_5", "Str_6", "Str_7", "Str_8", "Str_9", "Str_10")
+    RETURN_NAMES = ("Text_1", "Text_2", "Text_3", "Text_4", "Text_5", "Text_6", "Text_7", "Text_8", "Text_9", "Text_10")
     FUNCTION = "split_text"
     CATEGORY = "Custom/Matrix"
 
@@ -300,8 +293,9 @@ class MatrixTextExtractor:
             }
         }
 
+    # 瘦身：ID_String -> ID, Remainder_Text -> Remainder
     RETURN_TYPES = ("STRING", "STRING", "STRING")
-    RETURN_NAMES = ("ID_String", "Remainder_Text", "Combined_Text")
+    RETURN_NAMES = ("ID", "Remainder", "Combined")
     FUNCTION = "extract"
     CATEGORY = "Custom/Matrix"
 
@@ -356,12 +350,9 @@ class MatrixTextExtractor:
         return (extracted_id, remainder, combined)
 
 # ========================================================
-# 6. 节点：字符切割刀 (String Slicer) - 逻辑修正版
+# 6. 节点：字符切割刀 (String Slicer)
 # ========================================================
 class MatrixStringChopper:
-    """
-    字符串切割刀：截取两个自定义符号之间的文本
-    """
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -375,8 +366,9 @@ class MatrixStringChopper:
             }
         }
 
+    # 瘦身：缩写输出名，如 L_Part, L+R
     RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING")
-    RETURN_NAMES = ("Middle_Part", "Left_Part", "Right_Part", "Left_Right_Concat")
+    RETURN_NAMES = ("Middle", "L_Part", "R_Part", "L+R")
     FUNCTION = "chop"
     CATEGORY = "Custom/Matrix"
 
@@ -384,7 +376,6 @@ class MatrixStringChopper:
         if not text_input or not left_delimiter or not right_delimiter:
             return ("N/A", "N/A", "N/A", "N/A")
 
-        # 1. 寻找第 N 个左符号
         start_pos = -1
         current_pos = 0
         for _ in range(match_index):
@@ -394,40 +385,28 @@ class MatrixStringChopper:
             start_pos = found
             current_pos = found + len(left_delimiter)
 
-        # 2. 寻找右符号
         content_start = start_pos + len(left_delimiter)
         end_pos = text_input.find(right_delimiter, content_start)
 
         if end_pos == -1:
             return ("N/A", "N/A", "N/A", "N/A")
 
-        # 3. 核心切割逻辑 (修复版)
         right_delim_end = end_pos + len(right_delimiter)
 
         if include_delimiters:
-            # 模式：包含符号
-            # Middle: -[... Content ...]
             middle_part = text_input[start_pos : right_delim_end]
-            # Left: 004 (Before the left symbol)
             left_part = text_input[:start_pos]
-            # Right: -Tail (After the right symbol)
             right_part = text_input[right_delim_end:]
         else:
-            # 模式：不包含符号 (因果律消除)
-            # Middle: [... Content ...]
             middle_part = text_input[content_start : end_pos]
-            # Left: 004 (Stop before left symbol)
             left_part = text_input[:start_pos]
-            # Right: -Tail (Start after right symbol)
             right_part = text_input[right_delim_end:]
 
-        # 4. 组合输出 (Left + Right, 也就是挖空后的结果)
         concat_part = left_part + right_part
-
         return (middle_part, left_part, right_part, concat_part)
 
 # ========================================================
-# 注册所有节点 (中文美化版)
+# 注册所有节点 (瘦身标题)
 # ========================================================
 NODE_CLASS_MAPPINGS = {
     "MatrixImageLoader_Index": MatrixImageLoader_Index,
@@ -439,13 +418,14 @@ NODE_CLASS_MAPPINGS = {
 if HAS_QWEN:
     NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
 
+# 【汉化重命名 + 标题缩短】
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "MatrixImageLoader_Index": "Matrix Image Loader (Index 10) | 矩阵-滑块加载器",
-    "MatrixImageLoader_Direct": "Matrix Image Loader (String 10) | 矩阵-字符加载器",
-    "MatrixPromptSplitter": "Matrix Prompt Splitter (10) | 矩阵-文本拆分器",
-    "MatrixTextExtractor": "Matrix Smart ID Extractor | 矩阵-ID智能提取",
-    "MatrixStringChopper": "Matrix String Slicer | 矩阵-字符切割刀"
+    "MatrixImageLoader_Index": "Loader (Index) | 矩阵-滑块",
+    "MatrixImageLoader_Direct": "Loader (String) | 矩阵-字符",
+    "MatrixPromptSplitter": "Splitter (10) | 矩阵-拆分",
+    "MatrixTextExtractor": "ID Extractor | 矩阵-ID提取",
+    "MatrixStringChopper": "String Slicer | 矩阵-切割刀"
 }
 if HAS_QWEN:
-    Qwen_Display_Mappings["MatrixTextEncodeQwen5"] = "Qwen Text Encode (5 Images) | Qwen-VL编码器"
+    Qwen_Display_Mappings["MatrixTextEncodeQwen5"] = "Qwen Encode | Qwen-VL编码"
     NODE_DISPLAY_NAME_MAPPINGS.update(Qwen_Display_Mappings)
