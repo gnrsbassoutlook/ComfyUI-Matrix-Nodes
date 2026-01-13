@@ -1,53 +1,87 @@
 import math
+import torch
 import comfy.utils
 import node_helpers
 
 # ========================================================
-# 节点 1: 5图标准版 (推荐)
+# 辅助函数：检测是否为无效占位图
+# ========================================================
+def is_valid_image(img):
+    """
+    判断图片是否有效。
+    如果图片是 None，或者检测到是纯黑/纯白的占位图，返回 False。
+    """
+    if img is None:
+        return False
+    
+    # 检查 Tensor 是否为空
+    if img.numel() == 0:
+        return False
+
+    # 性能优化：只检查极值。
+    # Matrix 节点生成的占位图是纯 0.0 (黑) 或纯 1.0 (白)。
+    # 如果 min == max，说明整张图只有一个颜色。
+    # 并且这个颜色是 0 或 1，那大概率就是占位图。
+    min_val = img.min().item()
+    max_val = img.max().item()
+    
+    if min_val == max_val:
+        if min_val == 0.0 or min_val == 1.0:
+            return False
+            
+    return True
+
+# ========================================================
+# 节点 1: 5图标准版 (Strict Original + Smart Filter)
 # ========================================================
 class MatrixTextEncodeQwen5:
     """
     Qwen Text Encode (5 Images)
-    标准版：最稳健的配置，官方推荐 Sweet Spot。
+    1. 增加“智能过滤”：自动忽略纯黑/纯白占位图。
+    2. 参数名保持 image1... 官方兼容。
     """
     
     DESCRIPTION = """
     【Qwen-VL 编码器 (5图版)】
     功能：专为 Qwen-VL 模型设计的文本+图像编码节点。
-    特性：
-    1. 纯本地运行：移除了所有 API 依赖，无需联网。
-    2. 5图支持：优化后的注意力机制，支持 1-5 张参考图。
-    3. 智能分辨率：Smart Input 开启后自动调整编码尺寸。
+    
+    🚀 智能特性：
+    内置“占位图过滤器”。如果你连接了 Matrix Loader 的空插槽（输出纯黑/白图），
+    本节点会自动将其忽略，不计入 Token。
+    这意味着你可以放心地把 5 根线全连上，只用其中几张，完全不影响效果！
     """
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
             "clip": ("CLIP", ),
-            "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True, "tooltip": "正向提示词"}),
-            "neg_prompt": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "", "tooltip": "负向提示词"}), 
-            "smart_input": ("BOOLEAN", {"default": False, "tooltip": "智能分辨率：根据图片数量自动选择最佳编码尺寸。"}), 
-            "align_latent": (["disabled", "image1_only", "all"], {"default": "image1_only", "tooltip": "Latent对齐策略：决定哪些图片参与 VAE 编码对齐。"}), 
+            "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
+            "negative_prompt": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}), 
+            "smart_input": ("BOOLEAN", {"default": False, "tooltip": "开启后，根据【有效图片】的数量自动调整分辨率。"}), 
+            "align_latent": (["disabled", "image1_only", "all"], {"default": "image1_only"}), 
             },
             "optional": {
                 "vae": ("VAE", ),
-                "img_1": ("IMAGE", ),
-                "img_2": ("IMAGE", ),
-                "img_3": ("IMAGE", ),
-                "img_4": ("IMAGE", ),
-                "img_5": ("IMAGE", ),
+                "image1": ("IMAGE", ),
+                "image2": ("IMAGE", ),
+                "image3": ("IMAGE", ),
+                "image4": ("IMAGE", ),
+                "image5": ("IMAGE", ),
             }}
     
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING", "LATENT",)
-    RETURN_NAMES = ("cond+", "cond-", "latent") 
+    RETURN_NAMES = ("cond+", "cond-", "latent")
     FUNCTION = "encode"
     
     CATEGORY = "Custom/Matrix"
     
-    def encode(self, clip, prompt, neg_prompt, smart_input, align_latent, vae=None, img_1=None, img_2=None, img_3=None, img_4=None, img_5=None):
+    def encode(self, clip, prompt, negative_prompt, smart_input, align_latent, vae=None, image1=None, image2=None, image3=None, image4=None, image5=None):
         ref_latents = []
         
-        images = [img for img in [img_1, img_2, img_3, img_4, img_5] if img is not None]
+        # === 核心修改：使用智能过滤 ===
+        raw_images = [image1, image2, image3, image4, image5]
+        images = [img for img in raw_images if is_valid_image(img)]
+        # ===========================
         
         images_vl = []
         llama_template = "<|im_start|>system\nDescribe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
@@ -94,7 +128,7 @@ class MatrixTextEncodeQwen5:
                 
         tokens = clip.tokenize(image_prompt + prompt, images=images_vl, llama_template=llama_template)
         conditioning = clip.encode_from_tokens_scheduled(tokens)
-        tokensN = clip.tokenize(image_prompt + neg_prompt, images=images_vl, llama_template=llama_template)
+        tokensN = clip.tokenize(image_prompt + negative_prompt, images=images_vl, llama_template=llama_template)
         conditioningN = clip.encode_from_tokens_scheduled(tokensN)
         
         if len(ref_latents) > 0:
@@ -104,42 +138,33 @@ class MatrixTextEncodeQwen5:
         return (conditioning, conditioningN, {"samples": output_latent}, )
 
 # ========================================================
-# 节点 2: 10图试验版 (Experimental)
+# 节点 2: 10图试验版 (Strict Original + Smart Filter)
 # ========================================================
 class MatrixTextEncodeQwen10:
     """
     Qwen Text Encode (10 Images) - Experimental
-    试验性节点：支持多达 10 张图片输入。
+    同样增加了智能过滤。
     """
     
     DESCRIPTION = """
     【Qwen-VL 编码器 (10图试验版)】
-    *** EXPERIMENTAL / 试验性功能 ***
-    功能：扩展了输入上限，支持 1-10 张参考图。
-    警告：Qwen 模型最佳效果通常在 5 张图以内。输入过多图片可能会导致指令跟随能力下降或画面混乱。
+    功能：扩展了输入上限。
+    智能特性：同样内置“占位图过滤器”，自动剔除纯黑/纯白图片，减少模型干扰。
     """
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
             "clip": ("CLIP", ),
-            "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True, "tooltip": "正向提示词"}),
-            "neg_prompt": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "", "tooltip": "负向提示词"}), 
-            "smart_input": ("BOOLEAN", {"default": False, "tooltip": "智能分辨率：图片>2张时会自动降低分辨率以节省显存。"}), 
-            "align_latent": (["disabled", "image1_only", "all"], {"default": "image1_only", "tooltip": "Latent对齐策略"}), 
+            "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
+            "negative_prompt": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}), 
+            "smart_input": ("BOOLEAN", {"default": False}), 
+            "align_latent": (["disabled", "image1_only", "all"], {"default": "image1_only"}), 
             },
             "optional": {
                 "vae": ("VAE", ),
-                "img_1": ("IMAGE", ),
-                "img_2": ("IMAGE", ),
-                "img_3": ("IMAGE", ),
-                "img_4": ("IMAGE", ),
-                "img_5": ("IMAGE", ),
-                "img_6": ("IMAGE", ),
-                "img_7": ("IMAGE", ),
-                "img_8": ("IMAGE", ),
-                "img_9": ("IMAGE", ),
-                "img_10": ("IMAGE", ),
+                "image1": ("IMAGE", ), "image2": ("IMAGE", ), "image3": ("IMAGE", ), "image4": ("IMAGE", ), "image5": ("IMAGE", ),
+                "image6": ("IMAGE", ), "image7": ("IMAGE", ), "image8": ("IMAGE", ), "image9": ("IMAGE", ), "image10": ("IMAGE", ),
             }}
     
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING", "LATENT",)
@@ -148,11 +173,13 @@ class MatrixTextEncodeQwen10:
     
     CATEGORY = "Custom/Matrix"
     
-    def encode(self, clip, prompt, neg_prompt, smart_input, align_latent, vae=None, img_1=None, img_2=None, img_3=None, img_4=None, img_5=None, img_6=None, img_7=None, img_8=None, img_9=None, img_10=None):
+    def encode(self, clip, prompt, negative_prompt, smart_input, align_latent, vae=None, image1=None, image2=None, image3=None, image4=None, image5=None, image6=None, image7=None, image8=None, image9=None, image10=None):
         ref_latents = []
         
-        # 收集 10 张图
-        images = [img for img in [img_1, img_2, img_3, img_4, img_5, img_6, img_7, img_8, img_9, img_10] if img is not None]
+        # === 核心修改：使用智能过滤 ===
+        raw_images = [image1, image2, image3, image4, image5, image6, image7, image8, image9, image10]
+        images = [img for img in raw_images if is_valid_image(img)]
+        # ===========================
         
         images_vl = []
         llama_template = "<|im_start|>system\nDescribe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
@@ -199,7 +226,7 @@ class MatrixTextEncodeQwen10:
                 
         tokens = clip.tokenize(image_prompt + prompt, images=images_vl, llama_template=llama_template)
         conditioning = clip.encode_from_tokens_scheduled(tokens)
-        tokensN = clip.tokenize(image_prompt + neg_prompt, images=images_vl, llama_template=llama_template)
+        tokensN = clip.tokenize(image_prompt + negative_prompt, images=images_vl, llama_template=llama_template)
         conditioningN = clip.encode_from_tokens_scheduled(tokensN)
         
         if len(ref_latents) > 0:
@@ -214,6 +241,6 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "MatrixTextEncodeQwen5": "Qwen Encode (5 Imgs)",
-    "MatrixTextEncodeQwen10": "Qwen Encode (10 Imgs) (Experimental)"
+    "MatrixTextEncodeQwen5": "Matrix Qwen Encode (5)",
+    "MatrixTextEncodeQwen10": "Matrix Qwen Encode (10 Experimental)"
 }
