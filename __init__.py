@@ -5,14 +5,21 @@ import re
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 
 # ========================================================
-# 尝试引入 Qwen 节点
+# 尝试引入子模块
 # ========================================================
 try:
     from .qwen_encode import NODE_CLASS_MAPPINGS as Qwen_Mappings, NODE_DISPLAY_NAME_MAPPINGS as Qwen_Display_Mappings
     HAS_QWEN = True
 except ImportError:
     HAS_QWEN = False
-    print("MatrixNodes Info: qwen_encode.py not found, Qwen nodes will be disabled.")
+    print("MatrixNodes Info: qwen_encode.py not found.")
+
+try:
+    from .matrix_grid import NODE_CLASS_MAPPINGS as Grid_Mappings, NODE_DISPLAY_NAME_MAPPINGS as Grid_Display_Mappings
+    HAS_GRID = True
+except ImportError:
+    HAS_GRID = False
+    print("MatrixNodes Info: matrix_grid.py not found.")
 
 # ========================================================
 # 1. 核心工具函数
@@ -30,9 +37,9 @@ def create_error_image(text_content):
     draw = ImageDraw.Draw(img)
     font_size = 60
     font = None
-    font_candidates = ["arial.ttf", "segoeui.ttf", "Roboto-Regular.ttf", "msyh.ttf", "simhei.ttf"]
-    windows_font_paths = ["C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/msyh.ttf"]
     try:
+        font_candidates = ["arial.ttf", "segoeui.ttf", "msyh.ttf", "simhei.ttf"]
+        windows_font_paths = ["C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/msyh.ttf"]
         for font_name in font_candidates:
             try:
                 font = ImageFont.truetype(font_name, font_size)
@@ -43,10 +50,8 @@ def create_error_image(text_content):
                 if os.path.exists(font_path):
                     font = ImageFont.truetype(font_path, font_size)
                     break
-        if font is None:
-            font = ImageFont.load_default()
-    except:
-        font = ImageFont.load_default()
+        if font is None: font = ImageFont.load_default()
+    except: font = ImageFont.load_default()
     display_text = f"MISSING\nFILE:\n\n{text_content}"
     try:
         draw.multiline_text((width/2, height/2), display_text, fill=(255, 0, 0), font=font, anchor="mm", align="center")
@@ -69,7 +74,7 @@ def load_image_file(file_path):
         return None
 
 # ========================================================
-# 2. 通用基类 (简化 5/10 节点的代码重复)
+# 2. 通用基类
 # ========================================================
 
 class BaseMatrixLoaderIndex:
@@ -103,7 +108,8 @@ class BaseMatrixLoaderDirect:
     def process_common(self, folder_path, empty_style, count, **kwargs):
         images = []
         for i in range(1, count + 1):
-            inp = kwargs.get(f"img_text_{i}_input", "0")
+            # 【瘦身】输入变量名为 img_txt_x
+            inp = kwargs.get(f"img_txt_{i}", "0")
             inp_str = str(inp).strip()
             if inp_str == "0" or inp_str == "" or inp_str.lower() == "none":
                 images.append(create_placeholder(empty_style))
@@ -169,17 +175,17 @@ class BaseMatrixLoaderDirect:
         return None
 
 # ========================================================
-# 3. 节点实现：Loader (Index) - 5 & 10
+# 3. 节点实现：Loader (Index)
 # ========================================================
 
 class MatrixImageLoader_Index5(BaseMatrixLoaderIndex):
-    DESCRIPTION = "【矩阵-滑块加载器 (5图)】\n轻量版，通过滑块加载最多5张图片。"
+    DESCRIPTION = "【矩阵-滑块加载器 (5图)】"
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False, "tooltip": "图片文件夹路径"}),
-                "empty_style": (["White", "Black"], {"default": "White", "tooltip": "空位填充颜色"}),
+                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False, "tooltip": "路径"}),
+                "empty_style": (["White", "Black"], {"default": "White"}),
             },
             "optional": {
                 "slot1_prefix": ("STRING", {"default": "X"}), "slot1_index": ("INT", {"default": 1, "min": 0, "max": 9999}),
@@ -197,13 +203,13 @@ class MatrixImageLoader_Index5(BaseMatrixLoaderIndex):
         return self.process_common(folder_path, empty_style, 5, **kwargs)
 
 class MatrixImageLoader_Index10(BaseMatrixLoaderIndex):
-    DESCRIPTION = "【矩阵-滑块加载器 (10图)】\n完整版，通过滑块加载最多10张图片。"
+    DESCRIPTION = "【矩阵-滑块加载器 (10图)】"
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False, "tooltip": "图片文件夹路径"}),
-                "empty_style": (["White", "Black"], {"default": "White", "tooltip": "空位填充颜色"}),
+                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False}),
+                "empty_style": (["White", "Black"], {"default": "White"}),
             },
             "optional": {
                 "slot1_prefix": ("STRING", {"default": "X"}), "slot1_index": ("INT", {"default": 1, "min": 0, "max": 9999}),
@@ -226,53 +232,54 @@ class MatrixImageLoader_Index10(BaseMatrixLoaderIndex):
         return self.process_common(folder_path, empty_style, 10, **kwargs)
 
 # ========================================================
-# 4. 节点实现：Loader (Direct) - 5 & 10
+# 4. 节点实现：Loader (Direct) - UI瘦身版
 # ========================================================
 
 class MatrixImageLoader_Direct5(BaseMatrixLoaderDirect):
-    DESCRIPTION = "【矩阵-字符加载器 (5图)】\n轻量版，通过字符串智能匹配最多5张图片。"
+    DESCRIPTION = "【矩阵-字符加载器 (5图)】"
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False, "tooltip": "图片文件夹路径"}),
-                "empty_style": (["White", "Black"], {"default": "White", "tooltip": "空位填充颜色"}),
+                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False, "tooltip": "路径"}),
+                "empty_style": (["White", "Black"], {"default": "White"}),
             },
             "optional": {
-                "img_text_1_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入文件名/ID"}),
-                "img_text_2_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_3_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_4_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_5_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                # 【瘦身】 img_txt_x
+                "img_txt_1": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "ID/文件名/关键词"}),
+                "img_txt_2": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_3": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_4": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_5": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
             }
         }
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
-    RETURN_NAMES = ("Img_1", "Img_2", "Img_3", "Img_4", "Img_5")
+    RETURN_NAMES = ("Img_1", "Img_2", "Img_3", "Img_4", "Img_5") # 瘦身 Out -> Img
     FUNCTION = "process"
     CATEGORY = "Custom/Matrix"
     def process(self, folder_path, empty_style, **kwargs):
         return self.process_common(folder_path, empty_style, 5, **kwargs)
 
 class MatrixImageLoader_Direct10(BaseMatrixLoaderDirect):
-    DESCRIPTION = "【矩阵-字符加载器 (10图)】\n完整版，通过字符串智能匹配最多10张图片。"
+    DESCRIPTION = "【矩阵-字符加载器 (10图)】"
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False, "tooltip": "图片文件夹路径"}),
-                "empty_style": (["White", "Black"], {"default": "White", "tooltip": "空位填充颜色"}),
+                "folder_path": ("STRING", {"default": "C:/Images/Assets", "multiline": False}),
+                "empty_style": (["White", "Black"], {"default": "White"}),
             },
             "optional": {
-                "img_text_1_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入文件名/ID"}),
-                "img_text_2_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_3_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_4_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_5_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_6_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_7_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_8_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_9_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
-                "img_text_10_input": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_1": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "ID/文件名/关键词"}),
+                "img_txt_2": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_3": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_4": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_5": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_6": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_7": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_8": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_9": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
+                "img_txt_10": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
             }
         }
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
@@ -283,17 +290,17 @@ class MatrixImageLoader_Direct10(BaseMatrixLoaderDirect):
         return self.process_common(folder_path, empty_style, 10, **kwargs)
 
 # ========================================================
-# 5. 节点：文本拆分器 (Splitter) - 5 & 10
+# 5. 其他节点
 # ========================================================
 
 class MatrixPromptSplitter5:
-    DESCRIPTION = "【矩阵-文本拆分器 (5路)】\n提取中括号内容并拆分为5段。"
+    DESCRIPTION = "【矩阵-文本拆分器 (5路)】"
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True, "tooltip": "输入文本"}),
+                "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
                 "bracket_style": (["[]", "{}", "()", "<>", "''", '""', "【】", "《》", "（）", "“”"], {"default": "[]"}),
                 "separator": (["|", ",", "-", "_", "+", "=", "&", "@", "#", "$", "%", "^", "*", "~"], {"default": "|"}),
                 "bracket_index": ("INT", {"default": 1, "min": 1, "max": 99}),
@@ -303,7 +310,6 @@ class MatrixPromptSplitter5:
     RETURN_NAMES = ("Text_1", "Text_2", "Text_3", "Text_4", "Text_5")
     FUNCTION = "split_text"
     CATEGORY = "Custom/Matrix"
-
     def split_text(self, text_input, bracket_style, separator, bracket_index):
         left_char = bracket_style[0]
         right_char = bracket_style[1]
@@ -318,18 +324,16 @@ class MatrixPromptSplitter5:
                 if i < len(parts):
                     val = parts[i]
                     final_parts[i] = val if val else "0"
-                else:
-                    final_parts[i] = "0"
         return tuple(final_parts)
 
 class MatrixPromptSplitter10:
-    DESCRIPTION = "【矩阵-文本拆分器 (10路)】\n提取中括号内容并拆分为10段。"
+    DESCRIPTION = "【矩阵-文本拆分器 (10路)】"
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True, "tooltip": "输入文本"}),
+                "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
                 "bracket_style": (["[]", "{}", "()", "<>", "''", '""', "【】", "《》", "（）", "“”"], {"default": "[]"}),
                 "separator": (["|", ",", "-", "_", "+", "=", "&", "@", "#", "$", "%", "^", "*", "~"], {"default": "|"}),
                 "bracket_index": ("INT", {"default": 1, "min": 1, "max": 99}),
@@ -339,7 +343,6 @@ class MatrixPromptSplitter10:
     RETURN_NAMES = ("Text_1", "Text_2", "Text_3", "Text_4", "Text_5", "Text_6", "Text_7", "Text_8", "Text_9", "Text_10")
     FUNCTION = "split_text"
     CATEGORY = "Custom/Matrix"
-
     def split_text(self, text_input, bracket_style, separator, bracket_index):
         left_char = bracket_style[0]
         right_char = bracket_style[1]
@@ -354,16 +357,10 @@ class MatrixPromptSplitter10:
                 if i < len(parts):
                     val = parts[i]
                     final_parts[i] = val if val else "0"
-                else:
-                    final_parts[i] = "0"
         return tuple(final_parts)
 
-# ========================================================
-# 6. 其他工具节点 (无需分身)
-# ========================================================
-
 class MatrixTextExtractor:
-    DESCRIPTION = "【矩阵-ID智能提取】\n从长文本中提取 3-5 位字母数字混合的ID。"
+    DESCRIPTION = "【矩阵-ID智能提取】"
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -373,8 +370,8 @@ class MatrixTextExtractor:
             "required": {
                 "text_input": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
                 "search_mode": (["Auto (Smart 3-5 chars)", "Custom (Define Slots)"], {"default": "Auto (Smart 3-5 chars)"}),
-                "match_index": ("INT", {"default": 1, "min": 1, "max": 99, "step": 1, "tooltip": "提取第几个匹配的ID"}),
-                "remainder_length": ("INT", {"default": 0, "min": 0, "max": 9999, "step": 1, "tooltip": "0=无限"}),
+                "match_index": ("INT", {"default": 1, "min": 1, "max": 99}),
+                "remainder_length": ("INT", {"default": 0, "min": 0, "max": 9999}),
             },
             "optional": {
                 "char_1_type": (char_types, {"default": "Any (A-Z,0-9)"}),
@@ -388,7 +385,6 @@ class MatrixTextExtractor:
     RETURN_NAMES = ("ID", "Remainder", "Combined")
     FUNCTION = "extract"
     CATEGORY = "Custom/Matrix"
-
     def get_regex_for_type(self, type_str):
         if "Ignore" in type_str: return ""
         if "Any" in type_str: return "[a-zA-Z0-9]"
@@ -397,7 +393,6 @@ class MatrixTextExtractor:
         if "Lower" in type_str: return "[a-z]"
         if "Digit" in type_str: return "[0-9]"
         return "."
-
     def extract(self, text_input, search_mode, match_index, remainder_length, char_1_type, char_2_type, char_3_type, char_4_type, char_5_type):
         extracted_id = "0"
         remainder = ""
@@ -410,7 +405,7 @@ class MatrixTextExtractor:
                 if 3 <= len(val) <= 5:
                     if val.isalpha(): continue 
                     matches.append(m)
-        else: # Custom Mode
+        else:
             p1 = self.get_regex_for_type(char_1_type)
             p2 = self.get_regex_for_type(char_2_type)
             p3 = self.get_regex_for_type(char_3_type)
@@ -418,7 +413,6 @@ class MatrixTextExtractor:
             p5 = self.get_regex_for_type(char_5_type)
             pattern_str = f"({p1}{p2}{p3}{p4}{p5})"
             matches = list(re.finditer(pattern_str, text_input))
-
         target_idx = match_index - 1
         if target_idx >= 0 and target_idx < len(matches):
             target_match = matches[target_idx]
@@ -431,16 +425,11 @@ class MatrixTextExtractor:
             if remainder_length > 0:
                 if len(remainder) > remainder_length:
                     remainder = remainder[:remainder_length]
-            if remainder:
-                combined = f"{extracted_id} {remainder}"
-            else:
-                combined = extracted_id
-        else:
-            print(f"MatrixTextExtractor: Match Index {match_index} out of range.")
+            combined = f"{extracted_id} {remainder}" if remainder else extracted_id
         return (extracted_id, remainder, combined)
 
 class MatrixStringChopper:
-    DESCRIPTION = "【矩阵-字符切割刀】\n精确截取自定义符号之间的文本。"
+    DESCRIPTION = "【矩阵-字符切割刀】"
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -457,7 +446,6 @@ class MatrixStringChopper:
     RETURN_NAMES = ("Middle", "L_Part", "R_Part", "L+R")
     FUNCTION = "chop"
     CATEGORY = "Custom/Matrix"
-
     def chop(self, text_input, left_delimiter, right_delimiter, match_index, include_delimiters):
         if not text_input or not left_delimiter or not right_delimiter:
             return ("N/A", "N/A", "N/A", "N/A")
@@ -484,7 +472,7 @@ class MatrixStringChopper:
         return (middle_part, left_part, right_part, concat_part)
 
 # ========================================================
-# 注册所有节点 (Matrix 前缀)
+# 注册所有节点
 # ========================================================
 NODE_CLASS_MAPPINGS = {
     "MatrixImageLoader_Index5": MatrixImageLoader_Index5,
@@ -494,12 +482,9 @@ NODE_CLASS_MAPPINGS = {
     "MatrixPromptSplitter5": MatrixPromptSplitter5,
     "MatrixPromptSplitter10": MatrixPromptSplitter10,
     "MatrixTextExtractor": MatrixTextExtractor,
-    "MatrixStringChopper": MatrixStringChopper
+    "MatrixStringChopper": MatrixStringChopper,
 }
-if HAS_QWEN:
-    NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
 
-# 【汉化重命名】 统一使用 Matrix 开头
 NODE_DISPLAY_NAME_MAPPINGS = {
     "MatrixImageLoader_Index5": "Matrix Loader (Index 5) | 矩阵-滑块",
     "MatrixImageLoader_Index10": "Matrix Loader (Index 10) | 矩阵-滑块",
@@ -508,9 +493,15 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "MatrixPromptSplitter5": "Matrix Splitter (5) | 矩阵-拆分",
     "MatrixPromptSplitter10": "Matrix Splitter (10) | 矩阵-拆分",
     "MatrixTextExtractor": "Matrix ID Extractor | 矩阵-ID提取",
-    "MatrixStringChopper": "Matrix String Slicer | 矩阵-切割刀"
+    "MatrixStringChopper": "Matrix String Slicer | 矩阵-切割刀",
 }
+
 if HAS_QWEN:
+    NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
     Qwen_Display_Mappings["MatrixTextEncodeQwen5"] = "Matrix Qwen Encode (5) | Qwen-VL编码"
     Qwen_Display_Mappings["MatrixTextEncodeQwen10"] = "Matrix Qwen Encode (10 Experimental) | Qwen-VL编码"
     NODE_DISPLAY_NAME_MAPPINGS.update(Qwen_Display_Mappings)
+
+if HAS_GRID:
+    NODE_CLASS_MAPPINGS.update(Grid_Mappings)
+    NODE_DISPLAY_NAME_MAPPINGS.update(Grid_Display_Mappings)

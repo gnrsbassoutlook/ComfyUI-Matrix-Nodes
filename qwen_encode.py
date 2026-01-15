@@ -3,52 +3,32 @@ import torch
 import comfy.utils
 import node_helpers
 
-# ========================================================
-# 辅助函数：检测是否为无效占位图
-# ========================================================
 def is_valid_image(img):
-    """
-    判断图片是否有效。
-    如果图片是 None，或者检测到是纯黑/纯白的占位图，返回 False。
-    """
-    if img is None:
-        return False
-    
-    # 检查 Tensor 是否为空
-    if img.numel() == 0:
-        return False
-
-    # 性能优化：只检查极值。
-    # Matrix 节点生成的占位图是纯 0.0 (黑) 或纯 1.0 (白)。
-    # 如果 min == max，说明整张图只有一个颜色。
-    # 并且这个颜色是 0 或 1，那大概率就是占位图。
+    if img is None: return False
+    if img.numel() == 0: return False
     min_val = img.min().item()
     max_val = img.max().item()
-    
-    if min_val == max_val:
-        if min_val == 0.0 or min_val == 1.0:
-            return False
-            
+    if min_val == max_val and (min_val == 0.0 or min_val == 1.0):
+        return False
     return True
 
 # ========================================================
-# 节点 1: 5图标准版 (Strict Original + Smart Filter)
+# 节点 1: 5图标准版
 # ========================================================
 class MatrixTextEncodeQwen5:
     """
     Qwen Text Encode (5 Images)
-    1. 增加“智能过滤”：自动忽略纯黑/纯白占位图。
-    2. 参数名保持 image1... 官方兼容。
+    🚀 核心升级：动态重排逻辑
+    不管你选中哪张图做 Align，本节点都会把它偷偷挪到 Picture 1 的位置送给模型。
+    这能完美解决“只有 Image 1 能对齐”的问题。
     """
     
     DESCRIPTION = """
     【Qwen-VL 编码器 (5图版)】
-    功能：专为 Qwen-VL 模型设计的文本+图像编码节点。
-    
-    🚀 智能特性：
-    内置“占位图过滤器”。如果你连接了 Matrix Loader 的空插槽（输出纯黑/白图），
-    本节点会自动将其忽略，不计入 Token。
-    这意味着你可以放心地把 5 根线全连上，只用其中几张，完全不影响效果！
+    🚀 智能重排技术：
+    无论你选择 Image 3 还是 Image 5 作为对齐底板，
+    本节点都会自动将其调整为模型眼中的“第一张图”。
+    彻底解决非 Image 1 无法对齐的痛点！
     """
 
     @classmethod
@@ -57,8 +37,8 @@ class MatrixTextEncodeQwen5:
             "clip": ("CLIP", ),
             "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
             "negative_prompt": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}), 
-            "smart_input": ("BOOLEAN", {"default": False, "tooltip": "开启后，根据【有效图片】的数量自动调整分辨率。"}), 
-            "align_latent": (["disabled", "image1_only", "all"], {"default": "image1_only"}), 
+            "smart_input": ("BOOLEAN", {"default": False}), 
+            "align_latent": (["disabled", "image1", "image2", "image3", "image4", "image5"], {"default": "image1"}), 
             },
             "optional": {
                 "vae": ("VAE", ),
@@ -76,53 +56,68 @@ class MatrixTextEncodeQwen5:
     CATEGORY = "Custom/Matrix"
     
     def encode(self, clip, prompt, negative_prompt, smart_input, align_latent, vae=None, image1=None, image2=None, image3=None, image4=None, image5=None):
+        raw_inputs = [image1, image2, image3, image4, image5]
+        
+        # 1. 确定谁是主角 (Align Target)
+        target_img = None
+        other_images = []
+        
+        target_idx = -1
+        if align_latent != "disabled":
+            try:
+                target_idx = int(align_latent.replace("image", "")) - 1
+            except: pass
+
+        # 2. 构建重排后的列表 (valid_images)
+        # 逻辑：如果指定了 Target 且有效，把它放到列表第一位 (index 0)
+        # 其他有效图片跟在后面
+        
+        for idx, img in enumerate(raw_inputs):
+            if is_valid_image(img):
+                if idx == target_idx:
+                    target_img = img # 找到主角了
+                else:
+                    other_images.append(img) # 配角先排队
+        
+        final_images = []
+        output_latent = None
+        
+        if target_img is not None:
+            # 主角插队到第一位！
+            final_images.append(target_img)
+            # 计算 Latent
+            if vae is not None:
+                output_latent = vae.encode(target_img[:, :, :, :3])
+        
+        # 把其他配角接在后面
+        final_images.extend(other_images)
+        
+        # 3. 开始编码 (此时 final_images[0] 一定是我们要对齐的那张图)
         ref_latents = []
-        
-        # === 核心修改：使用智能过滤 ===
-        raw_images = [image1, image2, image3, image4, image5]
-        images = [img for img in raw_images if is_valid_image(img)]
-        # ===========================
-        
         images_vl = []
         llama_template = "<|im_start|>system\nDescribe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
         image_prompt = ""
-        output_latent = None
         
         size = 384
         if smart_input:
             size = 1024
-            if len(images) > 2:
+            if len(final_images) > 2:
                 size = 384
-            elif len(images) > 1:
+            elif len(final_images) > 1:
                 size = 512
         
-        for i, image in enumerate(images):
+        for i, image in enumerate(final_images):
             samples = image.movedim(-1, 1)
             total = int(size * size)
-            
             scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
             width = round(samples.shape[3] * scale_by)
             height = round(samples.shape[2] * scale_by)
-            
             s = comfy.utils.common_upscale(samples, width, height, "area", "disabled")
             images_vl.append(s.movedim(1, -1))
             
             if vae is not None:
-                if (align_latent == "image1_only" and i == 0) or align_latent == "all":
-                    l = vae.encode(image[:, :, :, :3])
-                    if i == 0:
-                        output_latent = l
-                    ref_latents.append(l)
-                else:
-                    if i == 0:
-                        output_latent = vae.encode(image[:, :, :, :3])
-                    total = int(1024 * 1024)
-                    scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
-                    width = round(samples.shape[3] * scale_by / 8.0) * 8
-                    height = round(samples.shape[2] * scale_by / 8.0) * 8
-                    
-                    s = comfy.utils.common_upscale(samples, width, height, "area", "disabled")
-                    ref_latents.append(vae.encode(s.movedim(1, -1)[:, :, :, :3]))
+                l = vae.encode(image[:, :, :, :3])
+                ref_latents.append(l)
                 
             image_prompt += "Picture {}: <|vision_start|><|image_pad|><|vision_end|>".format(i + 1)
                 
@@ -138,18 +133,17 @@ class MatrixTextEncodeQwen5:
         return (conditioning, conditioningN, {"samples": output_latent}, )
 
 # ========================================================
-# 节点 2: 10图试验版 (Strict Original + Smart Filter)
+# 节点 2: 10图试验版
 # ========================================================
 class MatrixTextEncodeQwen10:
     """
     Qwen Text Encode (10 Images) - Experimental
-    同样增加了智能过滤。
+    同样的重排逻辑。
     """
     
     DESCRIPTION = """
     【Qwen-VL 编码器 (10图试验版)】
-    功能：扩展了输入上限。
-    智能特性：同样内置“占位图过滤器”，自动剔除纯黑/纯白图片，减少模型干扰。
+    功能：扩展了输入上限，支持自由选择 1-10 任意一张作为底图（自动重排到第一位）。
     """
 
     @classmethod
@@ -159,7 +153,7 @@ class MatrixTextEncodeQwen10:
             "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
             "negative_prompt": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}), 
             "smart_input": ("BOOLEAN", {"default": False}), 
-            "align_latent": (["disabled", "image1_only", "all"], {"default": "image1_only"}), 
+            "align_latent": (["disabled", "image1", "image2", "image3", "image4", "image5", "image6", "image7", "image8", "image9", "image10"], {"default": "image1"}), 
             },
             "optional": {
                 "vae": ("VAE", ),
@@ -174,54 +168,59 @@ class MatrixTextEncodeQwen10:
     CATEGORY = "Custom/Matrix"
     
     def encode(self, clip, prompt, negative_prompt, smart_input, align_latent, vae=None, image1=None, image2=None, image3=None, image4=None, image5=None, image6=None, image7=None, image8=None, image9=None, image10=None):
+        raw_inputs = [image1, image2, image3, image4, image5, image6, image7, image8, image9, image10]
+        
+        target_img = None
+        other_images = []
+        target_idx = -1
+        
+        if align_latent != "disabled":
+            try:
+                target_idx = int(align_latent.replace("image", "")) - 1
+            except: pass
+
+        for idx, img in enumerate(raw_inputs):
+            if is_valid_image(img):
+                if idx == target_idx:
+                    target_img = img
+                else:
+                    other_images.append(img)
+        
+        final_images = []
+        output_latent = None
+        
+        if target_img is not None:
+            final_images.append(target_img)
+            if vae is not None:
+                output_latent = vae.encode(target_img[:, :, :, :3])
+        
+        final_images.extend(other_images)
+        
         ref_latents = []
-        
-        # === 核心修改：使用智能过滤 ===
-        raw_images = [image1, image2, image3, image4, image5, image6, image7, image8, image9, image10]
-        images = [img for img in raw_images if is_valid_image(img)]
-        # ===========================
-        
         images_vl = []
         llama_template = "<|im_start|>system\nDescribe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
         image_prompt = ""
-        output_latent = None
         
         size = 384
         if smart_input:
             size = 1024
-            if len(images) > 2:
+            if len(final_images) > 2:
                 size = 384
-            elif len(images) > 1:
+            elif len(final_images) > 1:
                 size = 512
         
-        for i, image in enumerate(images):
+        for i, image in enumerate(final_images):
             samples = image.movedim(-1, 1)
             total = int(size * size)
-            
             scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
             width = round(samples.shape[3] * scale_by)
             height = round(samples.shape[2] * scale_by)
-            
             s = comfy.utils.common_upscale(samples, width, height, "area", "disabled")
             images_vl.append(s.movedim(1, -1))
             
             if vae is not None:
-                if (align_latent == "image1_only" and i == 0) or align_latent == "all":
-                    l = vae.encode(image[:, :, :, :3])
-                    if i == 0:
-                        output_latent = l
-                    ref_latents.append(l)
-                else:
-                    if i == 0:
-                        output_latent = vae.encode(image[:, :, :, :3])
-                    total = int(1024 * 1024)
-                    scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
-                    width = round(samples.shape[3] * scale_by / 8.0) * 8
-                    height = round(samples.shape[2] * scale_by / 8.0) * 8
-                    
-                    s = comfy.utils.common_upscale(samples, width, height, "area", "disabled")
-                    ref_latents.append(vae.encode(s.movedim(1, -1)[:, :, :, :3]))
-                
+                l = vae.encode(image[:, :, :, :3])
+                ref_latents.append(l)
             image_prompt += "Picture {}: <|vision_start|><|image_pad|><|vision_end|>".format(i + 1)
                 
         tokens = clip.tokenize(image_prompt + prompt, images=images_vl, llama_template=llama_template)
