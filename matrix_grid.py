@@ -55,13 +55,23 @@ class BaseMatrixAssetGrid:
 
 class MatrixAssetGrid5(BaseMatrixAssetGrid):
     """5图版拼图"""
+    
+    DESCRIPTION = """
+    【矩阵-资产预览 (5图版)】
+    功能：将 1-5 张输入图片拼接成一张网格图，方便快速预览资产。
+    特点：
+    1. 极低显存占用：自动生成缩略图，而非全尺寸渲染。
+    2. 自动布局：根据列数自动换行。
+    3. 标签显示：可选择是否显示 "Img X" 标签。
+    """
+    
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "thumbnail_size": ("INT", {"default": 256, "min": 64, "max": 1024}),
-                "columns": ("INT", {"default": 5, "min": 1, "max": 5}), # 默认一行排满
-                "add_labels": ("BOOLEAN", {"default": True}),
+                "thumbnail_size": ("INT", {"default": 256, "min": 64, "max": 1024, "tooltip": "缩略图大小"}),
+                "columns": ("INT", {"default": 5, "min": 1, "max": 5, "tooltip": "每行显示几张"}), 
+                "add_labels": ("BOOLEAN", {"default": True, "tooltip": "显示图片编号"}),
             },
             "optional": {
                 "img_1": ("IMAGE", ), "img_2": ("IMAGE", ), "img_3": ("IMAGE", ), 
@@ -77,6 +87,13 @@ class MatrixAssetGrid5(BaseMatrixAssetGrid):
 
 class MatrixAssetGrid10(BaseMatrixAssetGrid):
     """10图版拼图"""
+    
+    DESCRIPTION = """
+    【矩阵-资产预览 (10图版)】
+    功能：将 1-10 张输入图片拼接成一张网格图。
+    建议：将 thumbnail_size 设为 256 或更小，以获得最佳预览体验。
+    """
+    
     @classmethod
     def INPUT_TYPES(s):
         return {

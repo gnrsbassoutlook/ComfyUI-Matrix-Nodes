@@ -108,7 +108,6 @@ class BaseMatrixLoaderDirect:
     def process_common(self, folder_path, empty_style, count, **kwargs):
         images = []
         for i in range(1, count + 1):
-            # 【瘦身】输入变量名为 img_txt_x
             inp = kwargs.get(f"img_txt_{i}", "0")
             inp_str = str(inp).strip()
             if inp_str == "0" or inp_str == "" or inp_str.lower() == "none":
@@ -179,7 +178,11 @@ class BaseMatrixLoaderDirect:
 # ========================================================
 
 class MatrixImageLoader_Index5(BaseMatrixLoaderIndex):
-    DESCRIPTION = "【矩阵-滑块加载器 (5图)】"
+    DESCRIPTION = """
+    【矩阵-滑块加载器 (5图版)】
+    功能：通过“前缀字母 + 数字滑块”的经典方式组合文件名并加载图片。
+    适用：文件名非常规范（如 X1.png, Y02.jpg）的场景。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -203,7 +206,11 @@ class MatrixImageLoader_Index5(BaseMatrixLoaderIndex):
         return self.process_common(folder_path, empty_style, 5, **kwargs)
 
 class MatrixImageLoader_Index10(BaseMatrixLoaderIndex):
-    DESCRIPTION = "【矩阵-滑块加载器 (10图)】"
+    DESCRIPTION = """
+    【矩阵-滑块加载器 (10图版)】
+    功能：通过“前缀字母 + 数字滑块”的经典方式组合文件名并加载图片。
+    支持：一次性控制 10 组图片索引。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -232,11 +239,18 @@ class MatrixImageLoader_Index10(BaseMatrixLoaderIndex):
         return self.process_common(folder_path, empty_style, 10, **kwargs)
 
 # ========================================================
-# 4. 节点实现：Loader (Direct) - UI瘦身版
+# 4. 节点实现：Loader (Direct)
 # ========================================================
 
 class MatrixImageLoader_Direct5(BaseMatrixLoaderDirect):
-    DESCRIPTION = "【矩阵-字符加载器 (5图)】"
+    DESCRIPTION = """
+    【矩阵-字符加载器 (5图版)】
+    功能：最强大的加载器，通过字符串（ID或关键词）智能搜图。
+    智能逻辑：
+    1. 自动归一化：输入 X1 自动匹配 X01。
+    2. 智能排序：优先匹配文件名最短的文件（精确匹配）。
+    3. 模糊容错：如果不是ID格式，则进行前缀模糊搜索。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -245,8 +259,7 @@ class MatrixImageLoader_Direct5(BaseMatrixLoaderDirect):
                 "empty_style": (["White", "Black"], {"default": "White"}),
             },
             "optional": {
-                # 【瘦身】 img_txt_x
-                "img_txt_1": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "ID/文件名/关键词"}),
+                "img_txt_1": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入文件名/ID"}),
                 "img_txt_2": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
                 "img_txt_3": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
                 "img_txt_4": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
@@ -254,14 +267,18 @@ class MatrixImageLoader_Direct5(BaseMatrixLoaderDirect):
             }
         }
     RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE")
-    RETURN_NAMES = ("Img_1", "Img_2", "Img_3", "Img_4", "Img_5") # 瘦身 Out -> Img
+    RETURN_NAMES = ("Img_1", "Img_2", "Img_3", "Img_4", "Img_5") 
     FUNCTION = "process"
     CATEGORY = "Custom/Matrix"
     def process(self, folder_path, empty_style, **kwargs):
         return self.process_common(folder_path, empty_style, 5, **kwargs)
 
 class MatrixImageLoader_Direct10(BaseMatrixLoaderDirect):
-    DESCRIPTION = "【矩阵-字符加载器 (10图)】"
+    DESCRIPTION = """
+    【矩阵-字符加载器 (10图版)】
+    功能：全功能版字符加载器，支持同时通过字符串控制 10 张图片。
+    建议：配合“矩阵-文本拆分器”使用，实现 Prompt 驱动的自动化加载。
+    """
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -270,7 +287,7 @@ class MatrixImageLoader_Direct10(BaseMatrixLoaderDirect):
                 "empty_style": (["White", "Black"], {"default": "White"}),
             },
             "optional": {
-                "img_txt_1": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "ID/文件名/关键词"}),
+                "img_txt_1": ("STRING", {"default": "0", "multiline": False, "forceInput": True, "tooltip": "输入文件名/ID"}),
                 "img_txt_2": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
                 "img_txt_3": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
                 "img_txt_4": ("STRING", {"default": "0", "multiline": False, "forceInput": True}),
@@ -294,7 +311,11 @@ class MatrixImageLoader_Direct10(BaseMatrixLoaderDirect):
 # ========================================================
 
 class MatrixPromptSplitter5:
-    DESCRIPTION = "【矩阵-文本拆分器 (5路)】"
+    DESCRIPTION = """
+    【矩阵-文本拆分器 (5路)】
+    功能：从长文本中提取指定中括号[]内的内容，并按分隔符拆分为5段。
+    示例：Scene [A|B|C] -> 输出 A, B, C, 0, 0。
+    """
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -327,7 +348,10 @@ class MatrixPromptSplitter5:
         return tuple(final_parts)
 
 class MatrixPromptSplitter10:
-    DESCRIPTION = "【矩阵-文本拆分器 (10路)】"
+    DESCRIPTION = """
+    【矩阵-文本拆分器 (10路)】
+    功能：同上，支持拆分出最多 10 段文本。
+    """
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -360,7 +384,14 @@ class MatrixPromptSplitter10:
         return tuple(final_parts)
 
 class MatrixTextExtractor:
-    DESCRIPTION = "【矩阵-ID智能提取】"
+    DESCRIPTION = """
+    【矩阵-ID智能提取】
+    功能：从叙述文本中智能“嗅探”出特定的资产 ID。
+    模式：
+    - Auto: 自动抓取 3-5 位字母数字组合（排除单词）。
+    - Custom: 高级模式，可自定义每一位的字符类型。
+    用途：配合 Loader 使用，从剧本中自动提取角色 ID。
+    """
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -429,7 +460,13 @@ class MatrixTextExtractor:
         return (extracted_id, remainder, combined)
 
 class MatrixStringChopper:
-    DESCRIPTION = "【矩阵-字符切割刀】"
+    DESCRIPTION = """
+    【矩阵-字符切割刀】
+    功能：精确截取两个自定义符号（如 '-' 和 ']'）之间的文本。
+    特性：
+    1. 三段输出：左剩余、中间截取、右剩余。
+    2. 灵活控制：可选择包含或排除分隔符。
+    """
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
