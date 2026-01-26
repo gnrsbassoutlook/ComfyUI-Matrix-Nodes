@@ -21,6 +21,13 @@ except ImportError:
     HAS_GRID = False
     print("MatrixNodes Info: matrix_grid.py not found.")
 
+try:
+    from .video_combine import NODE_CLASS_MAPPINGS as Video_Mappings, NODE_DISPLAY_NAME_MAPPINGS as Video_Display_Mappings
+    HAS_VIDEO = True
+except ImportError:
+    HAS_VIDEO = False
+    print("MatrixNodes Info: video_combine.py not found.")
+
 # ========================================================
 # 1. 核心工具函数
 # ========================================================
@@ -35,28 +42,9 @@ def create_error_image(text_content):
     width, height = 512, 512
     img = Image.new('RGB', (width, height), color=(128, 128, 128))
     draw = ImageDraw.Draw(img)
-    font_size = 60
-    font = None
-    try:
-        font_candidates = ["arial.ttf", "segoeui.ttf", "msyh.ttf", "simhei.ttf"]
-        windows_font_paths = ["C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/msyh.ttf"]
-        for font_name in font_candidates:
-            try:
-                font = ImageFont.truetype(font_name, font_size)
-                break
-            except: continue
-        if font is None:
-            for font_path in windows_font_paths:
-                if os.path.exists(font_path):
-                    font = ImageFont.truetype(font_path, font_size)
-                    break
-        if font is None: font = ImageFont.load_default()
+    try: font = ImageFont.truetype("arial.ttf", 60)
     except: font = ImageFont.load_default()
-    display_text = f"MISSING\nFILE:\n\n{text_content}"
-    try:
-        draw.multiline_text((width/2, height/2), display_text, fill=(255, 0, 0), font=font, anchor="mm", align="center")
-    except:
-        draw.text((20, 150), display_text, fill=(255, 0, 0), font=font)
+    draw.text((20, 200), f"MISSING:\n{text_content}", fill=(255, 0, 0), font=font)
     image = np.array(img).astype(np.float32) / 255.0
     image = torch.from_numpy(image)[None,]
     return image
@@ -178,11 +166,7 @@ class BaseMatrixLoaderDirect:
 # ========================================================
 
 class MatrixImageLoader_Index5(BaseMatrixLoaderIndex):
-    DESCRIPTION = """
-    【矩阵-滑块加载器 (5图版)】
-    功能：通过“前缀字母 + 数字滑块”的经典方式组合文件名并加载图片。
-    适用：文件名非常规范（如 X1.png, Y02.jpg）的场景。
-    """
+    DESCRIPTION = "【🧩 矩阵-滑块加载器 (5图版)】"
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -206,11 +190,7 @@ class MatrixImageLoader_Index5(BaseMatrixLoaderIndex):
         return self.process_common(folder_path, empty_style, 5, **kwargs)
 
 class MatrixImageLoader_Index10(BaseMatrixLoaderIndex):
-    DESCRIPTION = """
-    【矩阵-滑块加载器 (10图版)】
-    功能：通过“前缀字母 + 数字滑块”的经典方式组合文件名并加载图片。
-    支持：一次性控制 10 组图片索引。
-    """
+    DESCRIPTION = "【🧩 矩阵-滑块加载器 (10图版)】"
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -243,14 +223,7 @@ class MatrixImageLoader_Index10(BaseMatrixLoaderIndex):
 # ========================================================
 
 class MatrixImageLoader_Direct5(BaseMatrixLoaderDirect):
-    DESCRIPTION = """
-    【矩阵-字符加载器 (5图版)】
-    功能：最强大的加载器，通过字符串（ID或关键词）智能搜图。
-    智能逻辑：
-    1. 自动归一化：输入 X1 自动匹配 X01。
-    2. 智能排序：优先匹配文件名最短的文件（精确匹配）。
-    3. 模糊容错：如果不是ID格式，则进行前缀模糊搜索。
-    """
+    DESCRIPTION = "【🧩 矩阵-字符加载器 (5图版)】"
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -274,11 +247,7 @@ class MatrixImageLoader_Direct5(BaseMatrixLoaderDirect):
         return self.process_common(folder_path, empty_style, 5, **kwargs)
 
 class MatrixImageLoader_Direct10(BaseMatrixLoaderDirect):
-    DESCRIPTION = """
-    【矩阵-字符加载器 (10图版)】
-    功能：全功能版字符加载器，支持同时通过字符串控制 10 张图片。
-    建议：配合“矩阵-文本拆分器”使用，实现 Prompt 驱动的自动化加载。
-    """
+    DESCRIPTION = "【🧩 矩阵-字符加载器 (10图版)】"
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -311,11 +280,7 @@ class MatrixImageLoader_Direct10(BaseMatrixLoaderDirect):
 # ========================================================
 
 class MatrixPromptSplitter5:
-    DESCRIPTION = """
-    【矩阵-文本拆分器 (5路)】
-    功能：从长文本中提取指定中括号[]内的内容，并按分隔符拆分为5段。
-    示例：Scene [A|B|C] -> 输出 A, B, C, 0, 0。
-    """
+    DESCRIPTION = "【🧩 矩阵-文本拆分器 (5路)】"
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -348,10 +313,7 @@ class MatrixPromptSplitter5:
         return tuple(final_parts)
 
 class MatrixPromptSplitter10:
-    DESCRIPTION = """
-    【矩阵-文本拆分器 (10路)】
-    功能：同上，支持拆分出最多 10 段文本。
-    """
+    DESCRIPTION = "【🧩 矩阵-文本拆分器 (10路)】"
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -384,14 +346,7 @@ class MatrixPromptSplitter10:
         return tuple(final_parts)
 
 class MatrixTextExtractor:
-    DESCRIPTION = """
-    【矩阵-ID智能提取】
-    功能：从叙述文本中智能“嗅探”出特定的资产 ID。
-    模式：
-    - Auto: 自动抓取 3-5 位字母数字组合（排除单词）。
-    - Custom: 高级模式，可自定义每一位的字符类型。
-    用途：配合 Loader 使用，从剧本中自动提取角色 ID。
-    """
+    DESCRIPTION = "【🧩 矩阵-ID智能提取】"
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -460,13 +415,7 @@ class MatrixTextExtractor:
         return (extracted_id, remainder, combined)
 
 class MatrixStringChopper:
-    DESCRIPTION = """
-    【矩阵-字符切割刀】
-    功能：精确截取两个自定义符号（如 '-' 和 ']'）之间的文本。
-    特性：
-    1. 三段输出：左剩余、中间截取、右剩余。
-    2. 灵活控制：可选择包含或排除分隔符。
-    """
+    DESCRIPTION = "【🧩 矩阵-字符切割刀】"
     def __init__(self): pass
     @classmethod
     def INPUT_TYPES(s):
@@ -523,22 +472,26 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "MatrixImageLoader_Index5": "Matrix Loader (Index 5) | 矩阵-滑块",
-    "MatrixImageLoader_Index10": "Matrix Loader (Index 10) | 矩阵-滑块",
-    "MatrixImageLoader_Direct5": "Matrix Loader (String 5) | 矩阵-字符",
-    "MatrixImageLoader_Direct10": "Matrix Loader (String 10) | 矩阵-字符",
-    "MatrixPromptSplitter5": "Matrix Splitter (5) | 矩阵-拆分",
-    "MatrixPromptSplitter10": "Matrix Splitter (10) | 矩阵-拆分",
-    "MatrixTextExtractor": "Matrix ID Extractor | 矩阵-ID提取",
-    "MatrixStringChopper": "Matrix String Slicer | 矩阵-切割刀",
+    "MatrixImageLoader_Index5": "🧩 Matrix Loader (Index 5) | 矩阵-滑块",
+    "MatrixImageLoader_Index10": "🧩 Matrix Loader (Index 10) | 矩阵-滑块",
+    "MatrixImageLoader_Direct5": "🧩 Matrix Loader (String 5) | 矩阵-字符",
+    "MatrixImageLoader_Direct10": "🧩 Matrix Loader (String 10) | 矩阵-字符",
+    "MatrixPromptSplitter5": "🧩 Matrix Splitter (5) | 矩阵-拆分",
+    "MatrixPromptSplitter10": "🧩 Matrix Splitter (10) | 矩阵-拆分",
+    "MatrixTextExtractor": "🧩 Matrix ID Extractor | 矩阵-ID提取",
+    "MatrixStringChopper": "🧩 Matrix String Slicer | 矩阵-切割刀",
 }
 
 if HAS_QWEN:
     NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
-    Qwen_Display_Mappings["MatrixTextEncodeQwen5"] = "Matrix Qwen Encode (5) | Qwen-VL编码"
-    Qwen_Display_Mappings["MatrixTextEncodeQwen10"] = "Matrix Qwen Encode (10 Experimental) | Qwen-VL编码"
+    Qwen_Display_Mappings["MatrixTextEncodeQwen5"] = "🧩 Matrix Qwen Encode (5) | Qwen-VL编码"
+    Qwen_Display_Mappings["MatrixTextEncodeQwen10"] = "🧩 Matrix Qwen Encode (10) | Qwen-VL编码"
     NODE_DISPLAY_NAME_MAPPINGS.update(Qwen_Display_Mappings)
 
 if HAS_GRID:
     NODE_CLASS_MAPPINGS.update(Grid_Mappings)
     NODE_DISPLAY_NAME_MAPPINGS.update(Grid_Display_Mappings)
+
+if HAS_VIDEO:
+    NODE_CLASS_MAPPINGS.update(Video_Mappings)
+    NODE_DISPLAY_NAME_MAPPINGS.update(Video_Display_Mappings)
