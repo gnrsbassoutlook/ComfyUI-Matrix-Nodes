@@ -28,6 +28,13 @@ except ImportError:
     HAS_VIDEO = False
     print("MatrixNodes Info: video_combine.py not found.")
 
+try:
+    from .matrix_dataset import NODE_CLASS_MAPPINGS as Dataset_Mappings, NODE_DISPLAY_NAME_MAPPINGS as Dataset_Display_Mappings
+    HAS_DATASET = True
+except ImportError:
+    HAS_DATASET = False
+    print("MatrixNodes Info: matrix_dataset.py not found.")
+
 # ========================================================
 # 1. 核心工具函数
 # ========================================================
@@ -276,7 +283,99 @@ class MatrixImageLoader_Direct10(BaseMatrixLoaderDirect):
         return self.process_common(folder_path, empty_style, 10, **kwargs)
 
 # ========================================================
-# 5. 其他节点
+# 5. 新节点：Matrix Folder Iterator (文件夹遍历器)
+# ========================================================
+
+class MatrixFolderIterator:
+    """
+    【🧩 矩阵-文件夹遍历器】
+    功能：遍历文件夹中的图片，支持关键词过滤和索引控制。
+    """
+    
+    DESCRIPTION = """
+    【🧩 矩阵-文件夹遍历器】
+    功能：从指定文件夹中加载特定 Index 的图片。
+    
+    🚀 核心用法：
+    1. 配合 EasyUse Loop: 将 image_index 转换为输入，连接 Loop 节点的 index 输出。
+    2. 过滤功能: 只加载包含(或不包含)特定字符的图片 (例如只加载带 "LF" 的)。
+    3. 自动循环: 内置取模逻辑。如果有 5 张图，输入 Index 6 会自动加载 Index 1。
+    4. 统计输出: 输出符合条件的图片总数 (Count)，用于控制 Loop 的结束条件。
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "folder_path": ("STRING", {"default": "C:/Images", "multiline": False, "tooltip": "图片所在的文件夹路径"}),
+                "image_index": ("INT", {"default": 0, "min": 0, "max": 99999, "step": 1, "tooltip": "要加载第几张图 (支持 Loop 输入)"}),
+                "filter_mode": (["Contains", "Not Contains"], {"default": "Contains", "tooltip": "筛选模式：包含关键词 / 不包含关键词"}),
+                "filter_text": ("STRING", {"default": "", "multiline": False, "tooltip": "筛选关键词 (留空则匹配所有)"}),
+                "extension": (["All", "png", "jpg", "jpeg", "webp", "bmp"], {"default": "All", "tooltip": "只匹配特定后缀的文件"}),
+                "empty_style": (["White", "Black"], {"default": "White", "tooltip": "如果文件夹为空或找不到文件，输出的占位图颜色"}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING", "INT")
+    RETURN_NAMES = ("Image", "Filename", "Count")
+    FUNCTION = "load_image_by_index"
+    CATEGORY = "Custom/Matrix"
+
+    def load_image_by_index(self, folder_path, image_index, filter_mode, filter_text, extension, empty_style):
+        if not os.path.exists(folder_path):
+            print(f"MatrixIterator Error: Path not found {folder_path}")
+            return (create_placeholder(empty_style), "None", 0)
+
+        # 1. 获取所有文件并过滤后缀
+        try:
+            files = os.listdir(folder_path)
+        except Exception as e:
+            print(f"MatrixIterator Error reading dir: {e}")
+            return (create_placeholder(empty_style), "Error", 0)
+            
+        valid_exts = [".png", ".jpg", ".jpeg", ".webp", ".bmp"]
+        if extension != "All":
+            valid_exts = [f".{extension}"]
+
+        filtered_files = []
+        for f in files:
+            # 后缀检查
+            if not any(f.lower().endswith(ext) for ext in valid_exts):
+                continue
+            
+            # 关键词过滤
+            if filter_text:
+                if filter_mode == "Contains":
+                    if filter_text not in f: continue
+                else: # Not Contains
+                    if filter_text in f: continue
+            
+            filtered_files.append(f)
+
+        # 2. 排序 (保证 Index 对应关系稳定)
+        filtered_files.sort()
+        count = len(filtered_files)
+
+        if count == 0:
+            print("MatrixIterator: No matching files found.")
+            return (create_placeholder(empty_style), "None", 0)
+
+        # 3. 计算实际 Index (取模循环)
+        # 例如 count=5, index=0 -> 0; index=4 -> 4; index=5 -> 0
+        actual_index = image_index % count
+        
+        target_filename = filtered_files[actual_index]
+        full_path = os.path.join(folder_path, target_filename)
+
+        # 4. 加载图片
+        image = load_image_file(full_path)
+        if image is None:
+             image = create_error_image(target_filename)
+
+        return (image, target_filename, count)
+
+# ========================================================
+# 6. 其他节点
 # ========================================================
 
 class MatrixPromptSplitter5:
@@ -465,6 +564,7 @@ NODE_CLASS_MAPPINGS = {
     "MatrixImageLoader_Index10": MatrixImageLoader_Index10,
     "MatrixImageLoader_Direct5": MatrixImageLoader_Direct5,
     "MatrixImageLoader_Direct10": MatrixImageLoader_Direct10,
+    "MatrixFolderIterator": MatrixFolderIterator, # New Node
     "MatrixPromptSplitter5": MatrixPromptSplitter5,
     "MatrixPromptSplitter10": MatrixPromptSplitter10,
     "MatrixTextExtractor": MatrixTextExtractor,
@@ -476,6 +576,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "MatrixImageLoader_Index10": "🧩 Matrix Loader (Index 10) | 矩阵-滑块",
     "MatrixImageLoader_Direct5": "🧩 Matrix Loader (String 5) | 矩阵-字符",
     "MatrixImageLoader_Direct10": "🧩 Matrix Loader (String 10) | 矩阵-字符",
+    "MatrixFolderIterator": "🧩 Matrix Folder Iterator | 矩阵-文件夹遍历", # New Name
     "MatrixPromptSplitter5": "🧩 Matrix Splitter (5) | 矩阵-拆分",
     "MatrixPromptSplitter10": "🧩 Matrix Splitter (10) | 矩阵-拆分",
     "MatrixTextExtractor": "🧩 Matrix ID Extractor | 矩阵-ID提取",
@@ -485,7 +586,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 if HAS_QWEN:
     NODE_CLASS_MAPPINGS.update(Qwen_Mappings)
     Qwen_Display_Mappings["MatrixTextEncodeQwen5"] = "🧩 Matrix Qwen Encode (5) | Qwen-VL编码"
-    Qwen_Display_Mappings["MatrixTextEncodeQwen10"] = "🧩 Matrix Qwen Encode (10) | Qwen-VL编码"
+    Qwen_Display_Mappings["MatrixTextEncodeQwen10"] = "🧩 Matrix Qwen Encode (10 Experimental) | Qwen-VL编码"
     NODE_DISPLAY_NAME_MAPPINGS.update(Qwen_Display_Mappings)
 
 if HAS_GRID:
@@ -495,3 +596,7 @@ if HAS_GRID:
 if HAS_VIDEO:
     NODE_CLASS_MAPPINGS.update(Video_Mappings)
     NODE_DISPLAY_NAME_MAPPINGS.update(Video_Display_Mappings)
+
+if HAS_DATASET:
+    NODE_CLASS_MAPPINGS.update(Dataset_Mappings)
+    NODE_DISPLAY_NAME_MAPPINGS.update(Dataset_Display_Mappings)
